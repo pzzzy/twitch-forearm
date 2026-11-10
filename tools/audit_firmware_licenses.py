@@ -13,6 +13,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import shlex
 import subprocess
 
 PROJECT = Path(__file__).resolve().parents[1]
@@ -27,6 +28,53 @@ class AuditError(Exception):
     pass
 
 
+def compile_paths(command: dict, build: Path) -> tuple[Path, Path]:
+    """Resolve compilation-database paths without executing command text.
+
+    CMake versions differ on whether ``output`` is absolute, and that field is
+    optional in the compilation-database format. All relative paths belong to
+    the entry's working directory, not the audit process's working directory.
+    """
+    directory = Path(command["directory"])
+    if not directory.is_absolute():
+        directory = build / directory
+    directory = directory.resolve()
+
+    output = command.get("output")
+    if not output:
+        arguments = command.get("arguments")
+        if arguments is None:
+            arguments = shlex.split(command["command"])
+        if not isinstance(arguments, list) or not all(isinstance(arg, str) for arg in arguments):
+            raise AuditError("compile database arguments are not a string array")
+        outputs = []
+        index = 0
+        while index < len(arguments):
+            argument = arguments[index]
+            if argument in ("-o", "--output"):
+                index += 1
+                if index >= len(arguments):
+                    raise AuditError("compile database output option has no value")
+                outputs.append(arguments[index])
+            elif argument.startswith("--output="):
+                outputs.append(argument.partition("=")[2])
+            elif argument.startswith("-o") and len(argument) > 2:
+                outputs.append(argument[2:])
+            index += 1
+        if len(outputs) != 1 or not outputs[0]:
+            raise AuditError("compile database must identify exactly one object output")
+        output = outputs[0]
+
+    def resolve(value):
+        path = Path(value)
+        return (path if path.is_absolute() else directory / path).resolve()
+
+    source, output_path = resolve(command["file"]), resolve(output)
+    if not output_path.is_relative_to(build):
+        raise AuditError("compile database object output is outside the selected build")
+    return source, output_path
+
+
 class Inputs:
     def __init__(self, build: Path, sdk: Path | None = None):
         self.build = build.resolve()
@@ -39,6 +87,7 @@ class Inputs:
         self.archives: dict[str, dict] = {}
         self.objects: list[dict] = []
         self.missing: list[str] = []
+        self.stage = "build description"
 
     def normalized(self, path: Path) -> str:
         path = path.resolve()
@@ -70,16 +119,18 @@ class Inputs:
         return hashlib.sha256(data).hexdigest()
 
     def collect_build(self, build: Path, image: str, map_name: str):
+        build = build.resolve()
         mapping = defaultdict(list)
         output_mapping = {}
+        self.stage = image + " compile database"
         commands = json.loads((build / "compile_commands.json").read_text())
         for command in commands:
-            output = Path(command["output"]).resolve()
+            source, output = compile_paths(command, build)
             relative = output.relative_to(build).as_posix()
-            source = Path(command["file"]).resolve()
             mapping[output.name].append((relative, source, output))
             output_mapping[relative] = (source, output)
 
+        self.stage = image + " Ninja dependency evidence"
         deps_process = subprocess.run(["ninja", "-t", "deps"], cwd=build,
                                       capture_output=True, text=True, check=True)
         dependencies = {}
@@ -109,6 +160,7 @@ class Inputs:
                 if dependency.is_file() and output.is_file() and dependency.stat().st_mtime_ns > output.stat().st_mtime_ns:
                     self.missing.append("unbuilt source/header: " + self.normalized(dependency))
 
+        self.stage = image + " link map and dependencies"
         map_file = build / map_name
         text = map_file.read_text()
         # This conservative set includes linked members later discarded by GC.
@@ -171,6 +223,7 @@ class Inputs:
         self.collect_build(self.build / "bootloader", "bootloader", "bootloader.map")
         # Embedded CA data has no C copyright header, so explicitly inventory
         # both the generated payload and every public source input.
+        self.stage = "certificate source evidence"
         config = (self.build / "config/sdkconfig.h").read_text()
         if re.search(r"^#define CONFIG_MBEDTLS_CUSTOM_CERTIFICATE_BUNDLE\s+1$", config, re.M):
             self.missing.append("custom certificate source requires separate license review")
@@ -191,13 +244,19 @@ def audit(inputs: Inputs, catalog: dict) -> dict:
         missing.append("license coverage catalog has not been approved after review")
     approved = catalog["inputs"]
     license_files = set()
+    input_differences = []
     for name in sorted(inputs.paths):
         record = approved.get(name)
+        observed = inputs.digest(name)
         if record is None:
             missing.append("unreviewed input: " + name)
+            input_differences.append({"path": name, "expected_sha256": None,
+                                      "observed_sha256": observed})
             continue
-        if record["sha256"] != inputs.digest(name):
+        if record["sha256"] != observed:
             missing.append("reviewed input changed: " + name)
+            input_differences.append({"path": name, "expected_sha256": record["sha256"],
+                                      "observed_sha256": observed})
         license_files.update(record["license_files"])
     for record in catalog["license_files"]:
         path = PROJECT / record["path"]
@@ -229,6 +288,7 @@ def audit(inputs: Inputs, catalog: dict) -> dict:
         "archives": sorted(inputs.archives.values(), key=lambda record: record["path"]),
         "standalone_objects": inputs.objects,
         "reviewed_input_count": len(inputs.paths),
+        "input_differences": input_differences,
         "ca_sources": [{"path": name, "sha256": inputs.digest(name)} for name in sorted(inputs.paths)
                        if name.endswith(("/cacrt_all.pem", "/cacrt_local.pem", "/cacrt_deprecated.pem"))],
         "license_files": sorted(license_files),
@@ -243,15 +303,27 @@ def main() -> int:
     parser.add_argument("--sdk-path", type=Path)
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
+    inputs = None
+    stage = "build description"
     try:
-        inputs = Inputs(args.build_dir, args.sdk_path).collect()
+        inputs = Inputs(args.build_dir, args.sdk_path)
+        inputs.collect()
+        stage = "reviewed catalog comparison"
+        inputs.stage = stage
         report = audit(inputs, json.loads(CATALOG.read_text()))
     except (AuditError, OSError, ValueError, KeyError, subprocess.CalledProcessError) as error:
         # Never publish machine-specific exception paths in the release report.
+        stage = inputs.stage if inputs is not None else stage
+        # Stage names and our own AuditError messages contain only fixed text;
+        # never serialize arbitrary OS/JSON/subprocess exception paths.
+        diagnostic = {"stage": stage, "error_type": type(error).__name__}
+        if isinstance(error, AuditError):
+            diagnostic["detail"] = str(error)
         report = {"schema_version": 1, "complete": False, "application_sha256": "", "bootloader_sha256": "",
                   "sdk_version": "", "archives": [], "license_files": [],
+                  "diagnostic": diagnostic,
                   "missing": ["audit inputs could not be resolved; check final build, Ninja, SDK and reviewed catalog"]}
-        print("Firmware license audit could not resolve its inputs:", type(error).__name__)
+        print("Firmware license audit could not resolve its inputs:", type(error).__name__, "at", stage)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + "\n")
     print("Firmware license audit:", "complete" if report["complete"] else "INCOMPLETE",

@@ -1,10 +1,14 @@
 """Safety properties of release-license gating; no SDK or hardware required."""
 import hashlib
 import importlib.util
+import io
 import json
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from unittest.mock import patch
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "audit_firmware_licenses.py"
@@ -48,6 +52,7 @@ class LicenseAuditTest(unittest.TestCase):
         report = audit.audit(self.inputs, self.catalog)
         self.assertTrue(report["complete"])
         self.assertEqual(report["missing"], [])
+        self.assertEqual(report["input_differences"], [])
         self.assertEqual(report["application_sha256"], hashlib.sha256(b"application image").hexdigest())
         self.assertEqual(report["bootloader_sha256"], hashlib.sha256(b"bootloader image").hexdigest())
         self.assertNotIn(str(self.root), json.dumps(report))
@@ -57,6 +62,11 @@ class LicenseAuditTest(unittest.TestCase):
         report = audit.audit(self.inputs, self.catalog)
         self.assertFalse(report["complete"])
         self.assertIn("reviewed input changed: sdk/reviewed.h", report["missing"])
+        self.assertEqual(report["input_differences"], [{
+            "path": "sdk/reviewed.h",
+            "expected_sha256": self.catalog["inputs"]["sdk/reviewed.h"]["sha256"],
+            "observed_sha256": audit.sha256(self.inputs.paths["sdk/reviewed.h"])}])
+        self.assertNotIn(str(self.root), json.dumps(report))
 
     def test_unrecognized_member_source_fails_closed(self):
         new = self.root / "new-source.c"
@@ -65,6 +75,9 @@ class LicenseAuditTest(unittest.TestCase):
         report = audit.audit(self.inputs, self.catalog)
         self.assertFalse(report["complete"])
         self.assertIn("unreviewed input: sdk/new-source.c", report["missing"])
+        self.assertEqual(report["input_differences"], [{
+            "path": "sdk/new-source.c", "expected_sha256": None,
+            "observed_sha256": audit.sha256(new)}])
 
     def test_missing_or_changed_license_fails_closed(self):
         (self.root / "LICENSES/example.txt").unlink()
@@ -83,6 +96,84 @@ class LicenseAuditTest(unittest.TestCase):
         with self.assertRaises(audit.AuditError):
             self.inputs.normalized(self.root / ".local/private/credentials.json")
         self.assertEqual(self.inputs.normalized(self.root / ".local/sdk/include/public.h"), "sdk/include/public.h")
+
+    def test_compile_database_paths_use_entry_directory(self):
+        directory = self.build / "work"
+        directory.mkdir()
+        source, output = audit.compile_paths({
+            "directory": str(directory), "file": "../../sdk/source.c",
+            "output": "../objects/source.c.obj"}, self.build)
+        self.assertEqual(source, self.root / "sdk/source.c")
+        self.assertEqual(output, self.build / "objects/source.c.obj")
+        with self.assertRaises(audit.AuditError):
+            audit.compile_paths({"directory": str(directory), "file": "source.c",
+                                 "output": "../../outside.obj"}, self.build)
+
+    def test_real_collection_accepts_absolute_relative_and_optional_output(self):
+        """Exercise map/dependency resolution with CMake's portable DB variants."""
+        sdk = self.root / "sdk"
+        sdk.mkdir()
+        source = sdk / "source.c"
+        source.write_text("/* Reviewed source */\n")
+        object_relative = "esp-idf/example/CMakeFiles/__idf_example.dir/source.c.obj"
+        output = self.build / object_relative
+        output.parent.mkdir(parents=True)
+        output.write_bytes(b"compiled object")
+        archive = self.build / "esp-idf/example/libexample.a"
+        archive.write_bytes(b"built archive")
+        (self.build / "app.map").write_text(
+            "Archive member included to satisfy reference by file (symbol)\n\n"
+            "esp-idf/example/libexample.a(source.c.obj)\n"
+            "Discarded input sections\n")
+        dependency_output = object_relative + ": #deps 1, deps mtime 1 (VALID)\n    " + str(source) + "\n\n"
+        variants = [
+            {"output": str(output)},
+            {"output": object_relative},
+            {"arguments": ["cc", "-c", str(source), "-o", object_relative]},
+            {"command": "cc -c ../sdk/source.c -o '" + object_relative + "'"},
+            {"arguments": ["cc", "-c", str(source), "-o" + object_relative]},
+        ]
+        for variant in variants:
+            with self.subTest(variant=variant):
+                command = {"directory": str(self.build), "file": "../sdk/source.c", **variant}
+                (self.build / "compile_commands.json").write_text(json.dumps([command]))
+                self.inputs.paths = {}
+                self.inputs.archives = {}
+                self.inputs.missing = []
+                with patch.object(audit.subprocess, "run", return_value=subprocess.CompletedProcess(
+                        ["ninja", "-t", "deps"], 0, dependency_output, "")):
+                    self.inputs.collect_build(self.build, "application", "app.map")
+                self.assertEqual(self.inputs.missing, [])
+                self.assertEqual(set(self.inputs.paths), {"sdk/source.c"})
+                member = self.inputs.archives["build/esp-idf/example/libexample.a"]["members"][0]
+                self.assertEqual(member, {"name": "source.c.obj", "sources": ["sdk/source.c"]})
+
+    def test_missing_or_ambiguous_compile_output_fails_closed(self):
+        base = {"directory": str(self.build), "file": "source.c"}
+        for arguments in (["cc", "-c", "source.c"], ["cc", "-o"],
+                          ["cc", "-o", "one.obj", "-o", "two.obj"]):
+            with self.subTest(arguments=arguments), self.assertRaises(audit.AuditError):
+                audit.compile_paths({**base, "arguments": arguments}, self.build)
+
+    def test_resolution_failure_reports_stage_without_exception_paths(self):
+        (self.build / "project_description.json").write_text(json.dumps({
+            "idf_path": str(self.inputs.sdk),
+            "c_compiler": str(self.inputs.toolchain / "bin/cc")}))
+        report_path = self.build / "license-audit.json"
+
+        def fail_collect(inputs):
+            inputs.stage = "application compile database"
+            raise ValueError("unpublished personal path: " + str(self.root))
+
+        with patch.object(audit.Inputs, "collect", fail_collect), \
+                patch.object(sys, "argv", ["audit", "--build-dir", str(self.build),
+                                            "--output", str(report_path)]), redirect_stdout(io.StringIO()):
+            self.assertEqual(audit.main(), 1)
+        report = json.loads(report_path.read_text())
+        self.assertFalse(report["complete"])
+        self.assertEqual(report["diagnostic"], {
+            "stage": "application compile database", "error_type": "ValueError"})
+        self.assertNotIn(str(self.root), report_path.read_text())
 
 
 if __name__ == "__main__":
