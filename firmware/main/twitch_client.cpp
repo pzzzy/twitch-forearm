@@ -97,6 +97,7 @@ std::atomic<bool> wifi_connected{false};
 std::atomic<std::uint32_t> queue_drops{0};
 std::atomic<std::uint32_t> malformed{0};
 std::atomic<bool> http_active{false};
+std::atomic<bool> refresh_test_pending{false};
 std::atomic<bool> force_validation{false};
 std::atomic<std::uint32_t> disconnect_test_ms{0};
 std::atomic<std::uint32_t> wifi_disconnect_test_ms{0};
@@ -1014,6 +1015,7 @@ void worker(void*) {
                 if (wifi_connected.load() && now_ms() >= api_backoff_until_ms && *tokens.refresh) {
                     refresh_token(); next_network_attempt_ms = 0;
                 } else state_message("Refresh diagnostic was not attempted while offline or rate limited");
+                refresh_test_pending.store(false);
             }
             else {
                 stop_sockets(); tokens_forget(); login_cancel("Signed out of Twitch");
@@ -1226,8 +1228,15 @@ void twitch_request_wifi_disconnect_for_test(std::uint32_t duration_ms) {
 bool twitch_request_refresh_for_test() {
     const auto status = twitch_status();
     if (!commands || !status.authenticated || !wifi_connected.load() || status.login_pending ||
-        http_active.load() || uxQueueMessagesWaiting(commands) ||
+        uxQueueMessagesWaiting(commands) ||
         (moderation_results && uxQueueMessagesWaiting(moderation_results))) return false;
+    // The worker serializes all TLS operations. A currently active read-only
+    // request is safe to queue behind; the latch prevents duplicate queued or
+    // executing refresh diagnostics, including the gap before HTTP starts.
+    bool expected = false;
+    if (!refresh_test_pending.compare_exchange_strong(expected, true)) return false;
     Command command; command.kind = CommandKind::RefreshTest;
-    return xQueueSend(commands, &command, 0) == pdTRUE;
+    if (xQueueSend(commands, &command, 0) == pdTRUE) return true;
+    refresh_test_pending.store(false);
+    return false;
 }

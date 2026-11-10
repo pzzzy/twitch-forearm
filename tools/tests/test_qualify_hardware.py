@@ -261,6 +261,48 @@ class QualificationTests(unittest.TestCase):
             self.assertEqual(clock.now(), 31)
             self.assertFalse(run.report['checks'][-1]['passed'])
 
+    def test_refresh_submits_once_and_observes_delayed_success_failure_or_unknown(self):
+        for outcome, error in [('success', None), ('failure', AssertionError),
+                               ('unknown', TimeoutError), ('mixed', AssertionError), ('rejected', RuntimeError)]:
+            with self.subTest(outcome=outcome), tempfile.TemporaryDirectory() as directory:
+                clock = FakeClock()
+                device = FakeSoakDevice(clock)
+                original_command = device.command
+                queued_at = None
+
+                def command(name, **fields):
+                    nonlocal queued_at
+                    result = original_command(name, **fields)
+                    if name == 'refresh_login':
+                        queued_at = clock.now()
+                        if outcome == 'rejected':
+                            raise RuntimeError('Device rejected command: refresh_login')
+                    if name == 'status':
+                        age = clock.now() - queued_at if queued_at is not None else -1
+                        # The existing serialized worker operation takes two
+                        # seconds before this request can start, then finishes.
+                        result['twitch'].update(refresh_attempts=int(age >= 2),
+                            refresh_succeeded=int(age >= 4 and outcome in ('success', 'mixed')),
+                            refresh_failed=int(age >= 4 and outcome in ('failure', 'mixed')))
+                    return result
+
+                device.command = command
+                run = Qualification(device, Path(directory) / 'report.json', clock.now, clock.sleep)
+                run.save = Mock()
+                if error:
+                    with self.assertRaises(error):
+                        run.refresh_once(timeout=5)
+                else:
+                    run.refresh_once(timeout=5)
+                    self.assertEqual(clock.now(), 5)
+                    self.assertEqual(run.report['samples'][-1]['label'], 'refresh-restored')
+                self.assertEqual([name for name, _ in device.calls].count('refresh_login'), 1)
+                self.assertLessEqual(set(name for name, _ in device.calls), {'status', 'refresh_login'})
+                if outcome == 'unknown':
+                    self.assertEqual(clock.now(), 6)  # Deadline ends observation, never replays the request.
+                if outcome == 'rejected':
+                    self.assertEqual(clock.now(), 1)
+
 
 if __name__ == '__main__':
     unittest.main()

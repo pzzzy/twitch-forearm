@@ -142,6 +142,21 @@ class Qualification:
         self.check(f'{command} recovered {iteration}', after['twitch']['login'] == before['twitch']['login'] and
                    after['twitch']['channel'] == before['twitch']['channel'], recovery_seconds=self.now() - started)
 
+    def refresh_once(self, timeout=90):
+        """Submit once, then observe. Never replay a rotating-token request."""
+        before = self.snapshot('refresh-before')['twitch']
+        self.command('refresh_login')
+        deadline = self.now() + timeout
+        while True:
+            after = self.snapshot('refresh-wait')['twitch']
+            if after['refresh_failed'] > before['refresh_failed']:
+                raise AssertionError('Explicit saved-token refresh failed; it was not retried')
+            if after['refresh_succeeded'] > before['refresh_succeeded']:
+                return self.wait_connected('refresh-restored')
+            if self.now() >= deadline:
+                raise TimeoutError('Saved-token refresh outcome unknown; it was not retried')
+            self.sleep(min(1, max(0, deadline - self.now())))
+
     def inject(self, points, step=.06):
         """Explicit synthetic input. Always releases and disables injection."""
         try:
@@ -299,16 +314,7 @@ def main():
                 for fault in ('network_disconnect', 'wifi_disconnect'):
                     run.recover(fault, 2000 if args.profile == 'smoke' else 5000, index + 1)
             if args.refresh:
-                before = run.snapshot('refresh-before')['twitch']
-                run.command('refresh_login')
-                deadline = time.monotonic() + 90
-                while True:
-                    after = run.snapshot('refresh-wait')['twitch']
-                    if after['refresh_succeeded'] > before['refresh_succeeded']:
-                        run.wait_connected('refresh-restored'); break
-                    if after['refresh_failed'] > before['refresh_failed'] or time.monotonic() > deadline:
-                        raise AssertionError('Explicit saved-token refresh failed')
-                    time.sleep(1)
+                run.refresh_once()
             if args.profile in ('soak', 'full'):
                 run.active_soak(args.soak_seconds)
             run.command('fixture_mode', enabled=0)

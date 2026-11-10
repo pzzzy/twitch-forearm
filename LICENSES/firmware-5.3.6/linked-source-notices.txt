@@ -8180,6 +8180,7 @@ Files:
   toolchain/xtensa-esp-elf/include/c++/13.2.0/cinttypes
   toolchain/xtensa-esp-elf/include/c++/13.2.0/clocale
   toolchain/xtensa-esp-elf/include/c++/13.2.0/concepts
+  toolchain/xtensa-esp-elf/include/c++/13.2.0/cstdarg
   toolchain/xtensa-esp-elf/include/c++/13.2.0/cstddef
   toolchain/xtensa-esp-elf/include/c++/13.2.0/cstdint
   toolchain/xtensa-esp-elf/include/c++/13.2.0/cstdio
@@ -8442,6 +8443,7 @@ Files:
   toolchain/xtensa-esp-elf/include/c++/13.2.0/cctype
   toolchain/xtensa-esp-elf/include/c++/13.2.0/cerrno
   toolchain/xtensa-esp-elf/include/c++/13.2.0/clocale
+  toolchain/xtensa-esp-elf/include/c++/13.2.0/cstdarg
   toolchain/xtensa-esp-elf/include/c++/13.2.0/cstddef
   toolchain/xtensa-esp-elf/include/c++/13.2.0/cstdio
   toolchain/xtensa-esp-elf/include/c++/13.2.0/cstdlib

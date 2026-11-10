@@ -82,8 +82,10 @@ forearm::ModerationCapabilities twitch_moderation_capabilities();
 // Copies one confirmed immutable request. Pending means accepted for immediate
 // processing, not successful moderation. It is never queued while offline.
 forearm::ModerationResult twitch_moderate(const forearm::ModerationRequest& request);
-// Read-only diagnostics for recovery qualification, with no credential output.
+// Local recovery diagnostics, with no chat/moderation sends or credential output.
 void twitch_request_disconnect_for_test(std::uint32_t duration_ms);
 void twitch_request_wifi_disconnect_for_test(std::uint32_t duration_ms);
+// Accept one explicit refresh behind the worker's current bounded HTTP call.
+// true means queued, never successful; no diagnostic is replayed after failure.
 bool twitch_request_refresh_for_test();
 void twitch_request_validation();

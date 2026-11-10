@@ -34,6 +34,11 @@ inputs or notices, stale source/header objects, a partial build, an unsupported
 SDK, or custom certificates. It resolves source candidates from both compile
 databases and obtains actual included headers through Ninja dependency data.
 Prebuilt archives and standalone runtime objects require exact reviewed hashes.
+Five toolchain inputs also have explicit Linux-amd64 variants from the official
+`esp-13.2.0_20250707` package. Their per-file hashes and checksum-verified package
+provenance are recorded in `coverage.json` and `provenance.json`; the original
+macOS hashes remain approved. Unlisted hashes and other files receive no such
+approval. The report identifies any reviewed variant used by that build.
 Its report contains portable paths and exact application/bootloader hashes.
 Distribute the report, root LICENSE/NOTICE, THIRD_PARTY_NOTICES.md, and this
 complete LICENSES tree with firmware. Never use a report for another binary.

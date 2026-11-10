@@ -136,6 +136,13 @@ lv_obj_t *content = nullptr;
 lv_obj_t *empty_hint = nullptr;
 lv_obj_t *follow_button = nullptr;
 lv_obj_t *follow_label = nullptr;
+lv_obj_t *settings_hit = nullptr;
+lv_obj_t *settings_visual = nullptr;
+bool settings_requested = false;
+bool settings_contact = false;
+bool settings_dragged = false;
+lv_point_t settings_pressed_point{};
+std::uint32_t settings_pressed_tick = 0;
 lv_obj_t *overlay = nullptr;
 lv_obj_t *fixture_badge = nullptr;
 bool selection_visible = false;
@@ -1116,6 +1123,33 @@ void account_event(lv_event_t *) {
            upgrade ? upgrade_event : connect_event, 0x76509E);
     button(panel, LV_SYMBOL_LEFT "  Back", 14, height - 70, width - 28, 56, close_event);
 }
+
+void settings_event(lv_event_t *event) {
+    const auto code = lv_event_get_code(event);
+    auto *indev = lv_indev_get_act();
+    if (code == LV_EVENT_PRESSED) {
+        settings_contact = indev != nullptr;
+        settings_dragged = false;
+        settings_pressed_tick = lv_tick_get();
+        if (indev) lv_indev_get_point(indev, &settings_pressed_point);
+        lv_obj_set_style_bg_color(settings_visual, color(0x49315E), 0);
+    } else if (code == LV_EVENT_PRESSING && indev) {
+        lv_point_t point{};
+        lv_indev_get_point(indev, &point);
+        if (std::abs(point.x - settings_pressed_point.x) > 12 ||
+            std::abs(point.y - settings_pressed_point.y) > 12) settings_dragged = true;
+    } else if (code == LV_EVENT_PRESS_LOST || code == LV_EVENT_LONG_PRESSED) {
+        settings_contact = false;
+        settings_dragged = true;
+        lv_obj_set_style_bg_color(settings_visual, color(kSurface), 0);
+    } else if (code == LV_EVENT_RELEASED) {
+        lv_obj_set_style_bg_color(settings_visual, color(kSurface), 0);
+    } else if (code == LV_EVENT_SHORT_CLICKED) {
+        if (settings_contact && !settings_dragged && lv_tick_elaps(settings_pressed_tick) < 650)
+            settings_requested = true;
+        settings_contact = false;
+    }
+}
 } // namespace
 
 void app_ui_init() {
@@ -1169,9 +1203,25 @@ void app_ui_init() {
         lv_obj_add_event_cb(row.button, row_event, LV_EVENT_ALL, &row);
         lv_obj_add_flag(row.button, LV_OBJ_FLAG_HIDDEN);
     }
-    auto *settings = button(screen, LV_SYMBOL_SETTINGS, width - 62, 10, 52, 52, account_event, kSurface);
-    lv_obj_set_style_radius(settings, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_opa(settings, LV_OPA_80, 0);
+    // The 52px circle keeps its visual position. A transparent 72px corner
+    // target above chat owns the full contact, including the screen edges.
+    settings_hit = lv_btn_create(screen);
+    lv_obj_remove_style_all(settings_hit);
+    lv_obj_set_pos(settings_hit, width - 72, 0);
+    lv_obj_set_size(settings_hit, 72, 72);
+    lv_obj_set_style_bg_opa(settings_hit, LV_OPA_TRANSP, 0);
+    lv_obj_clear_flag(settings_hit, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_SCROLL_ON_FOCUS |
+                                  LV_OBJ_FLAG_SCROLL_CHAIN | LV_OBJ_FLAG_GESTURE_BUBBLE | LV_OBJ_FLAG_ADV_HITTEST);
+    lv_obj_add_flag(settings_hit, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_PRESS_LOCK);
+    settings_visual = plain(settings_hit, 10, 10, 52, 52, kSurface);
+    lv_obj_set_style_radius(settings_visual, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_opa(settings_visual, LV_OPA_80, 0);
+    lv_obj_clear_flag(settings_visual, LV_OBJ_FLAG_CLICKABLE);
+    auto *settings_caption = label(settings_visual, LV_SYMBOL_SETTINGS, 0, 0, 40, &lv_font_montserrat_20, kText);
+    lv_obj_clear_flag(settings_caption, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_style_text_align(settings_caption, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_center(settings_caption);
+    lv_obj_add_event_cb(settings_hit, settings_event, LV_EVENT_ALL, nullptr);
     follow_button = button(screen, LV_SYMBOL_PAUSE, width - 62, height - 62, 52, 52, follow_event, kSurface);
     follow_label = lv_obj_get_child(follow_button, 0);
     fixture_badge = label(screen, "SYNTHETIC FIXTURE", 12, 10, 190, &lv_font_montserrat_16, kAmber);
@@ -1190,6 +1240,11 @@ void app_ui_init() {
 void app_ui_tick() {
     if (!store) return;
     ScopedDuration timer{tick_duration};
+    if (settings_requested) {
+        settings_requested = false;
+        consume_contact();
+        account_event(nullptr);
+    }
     if (close_requested) {
         const bool start_login = connect_requested;
         const bool upgrade_login = upgrade_requested;

@@ -419,5 +419,61 @@ int main() {
     assert(lv_obj_has_state(button_named("Delete"), LV_STATE_DISABLED));
     app_ui_set_fixture_mode(false); pump(500);
     assert(!app_ui_stats().fixture_mode && !app_ui_stats().demo && app_ui_stats().retained == 0);
+
+    // Dense rows extend beneath the small floating cog. Its transparent
+    // 72px corner target must own every contact, including display edges.
+    for (unsigned i = 0; i < 30; ++i) {
+        char id[32]; std::snprintf(id, sizeof(id), "settings-dense-%u", i);
+        assert(app_ui_append("100", id, "300", "Dense chat viewer",
+            "A chat row remains under the floating settings control, including its transparent touch margin."));
+    }
+    app_ui_go_live(); pump(500);
+    auto *cog_visual = lv_obj_get_parent(find_label(lv_scr_act(), LV_SYMBOL_SETTINGS));
+    lv_area_t cog_pixels{}; lv_obj_get_coords(cog_visual, &cog_pixels);
+    assert(cog_pixels.x1 == 258 && cog_pixels.y1 == 10 && cog_pixels.x2 == 309 && cog_pixels.y2 == 61);
+    const auto row_taps = app_ui_stats().taps;
+    for (const auto point : {lv_point_t{248, 0}, lv_point_t{319, 0}, lv_point_t{248, 71}, lv_point_t{319, 71},
+                             lv_point_t{256, 0}, lv_point_t{256, 63}, lv_point_t{319, 63},
+                             lv_point_t{257, 32}, lv_point_t{318, 32}, lv_point_t{284, 1}, lv_point_t{284, 62},
+                             lv_point_t{260, 8}, lv_point_t{310, 8}, lv_point_t{260, 60}, lv_point_t{310, 60}}) {
+        tap(point.x, point.y); pump(64);
+        assert(find_label(lv_scr_act(), "FOREARM CHAT"));
+        assert(!app_ui_stats().selection_visible && app_ui_stats().taps == row_taps && !app_ui_stats().paused);
+        tap_button(LV_SYMBOL_LEFT "  Back"); pump(500);
+        assert(!find_label(lv_scr_act(), "FOREARM CHAT"));
+    }
+    touch(319, 71, LV_INDEV_STATE_PR);
+    assert(app_ui_append("100", "settings-held-arrival", "300", "New chat arrival", "Rows may move beneath a held settings contact."));
+    pump(64); touch(319, 71, LV_INDEV_STATE_REL); pump(64);
+    assert(find_label(lv_scr_act(), "FOREARM CHAT") && app_ui_stats().taps == row_taps);
+    tap_button(LV_SYMBOL_LEFT "  Back"); pump(500);
+    // Finger jitter is tolerated; a drag, long hold, or slide from a chat row
+    // never opens settings or selects the underlying row on release.
+    touch(284, 36, LV_INDEV_STATE_PR); touch(291, 42, LV_INDEV_STATE_PR);
+    touch(291, 42, LV_INDEV_STATE_REL); pump(64);
+    assert(find_label(lv_scr_act(), "FOREARM CHAT"));
+    tap_button(LV_SYMBOL_LEFT "  Back"); pump(500);
+    touch(284, 36, LV_INDEV_STATE_PR); touch(284, 60, LV_INDEV_STATE_PR);
+    touch(284, 36, LV_INDEV_STATE_PR); touch(284, 36, LV_INDEV_STATE_REL); pump(64);
+    assert(!find_label(lv_scr_act(), "FOREARM CHAT") && !app_ui_stats().selection_visible);
+    assert(app_ui_stats().taps == row_taps && !app_ui_stats().paused);
+    touch(284, 36, LV_INDEV_STATE_PR); touch(180, 140, LV_INDEV_STATE_PR);
+    touch(180, 140, LV_INDEV_STATE_REL); pump(64);
+    assert(!find_label(lv_scr_act(), "FOREARM CHAT") && !app_ui_stats().selection_visible);
+    touch(284, 36, LV_INDEV_STATE_PR); pump(800); touch(284, 36, LV_INDEV_STATE_REL); pump(64);
+    assert(!find_label(lv_scr_act(), "FOREARM CHAT"));
+    touch(230, 36, LV_INDEV_STATE_PR); touch(284, 36, LV_INDEV_STATE_PR);
+    touch(284, 36, LV_INDEV_STATE_REL); pump(64);
+    assert(!find_label(lv_scr_act(), "FOREARM CHAT") && !app_ui_stats().selection_visible);
+    app_ui_go_live(); pump(64);
+    tap(284, 36); pump(64);
+    assert(find_label(lv_scr_act(), "FOREARM CHAT"));
+    tap(319, 0); pump(64); // The open overlay retains priority over the cog.
+    tap_button(LV_SYMBOL_LEFT "  Back"); pump(500);
+    assert(!find_label(lv_scr_act(), "FOREARM CHAT"));
+    tap(247, 36); pump(500); // One pixel outside the target still belongs to chat.
+    assert(app_ui_stats().selection_visible && !find_label(lv_scr_act(), "FOREARM CHAT"));
+    back_to_chat(); app_ui_go_live(); pump(64);
+    std::puts("Floating settings target passed: dense-chat corner/edge taps, unchanged 52px circle, held-contact arrivals, jitter, drag/hold/slide rejection and overlay priority.");
     std::puts("Native LVGL moderation UI passed: guarded contacts, distinct confirmation, drag/doubletap rejection, frozen pending target, permissions, source identity, deletion, stale session, all timeout presets, unknown/no retry, acknowledged-only Undo/Unban, immutable restoration after history eviction/clear/new selection, new request IDs, no held-contact confirmation.");
 }

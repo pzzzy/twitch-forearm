@@ -79,6 +79,44 @@ class LicenseAuditTest(unittest.TestCase):
             "path": "sdk/new-source.c", "expected_sha256": None,
             "observed_sha256": audit.sha256(new)}])
 
+    def test_reviewed_platform_variant_is_exact_and_retains_original(self):
+        record = self.catalog["inputs"]["sdk/reviewed.h"]
+        original = self.inputs.paths["sdk/reviewed.h"].read_bytes()
+        alternate = b"Reviewed platform configuration with identical license"
+        alternate_hash = hashlib.sha256(alternate).hexdigest()
+        record["reviewed_variants"] = [{"sha256": alternate_hash, "provenance": "official-linux-package"}]
+        self.catalog["variant_provenance"] = {"official-linux-package": {"review_status": "approved"}}
+        self.assertTrue(audit.audit(self.inputs, self.catalog)["complete"])
+        self.inputs.paths["sdk/reviewed.h"].write_bytes(alternate)
+        report = audit.audit(self.inputs, self.catalog)
+        self.assertTrue(report["complete"])
+        self.assertEqual(report["reviewed_variants_used"], [{
+            "path": "sdk/reviewed.h", "sha256": alternate_hash, "provenance": "official-linux-package"}])
+        self.inputs.paths["sdk/reviewed.h"].write_bytes(alternate + b" unreviewed edit")
+        self.assertFalse(audit.audit(self.inputs, self.catalog)["complete"])
+        self.inputs.paths["sdk/reviewed.h"].write_bytes(original)
+        self.assertTrue(audit.audit(self.inputs, self.catalog)["complete"])
+
+    def test_variant_does_not_approve_another_path_or_unreviewed_provenance(self):
+        record = self.catalog["inputs"]["sdk/reviewed.h"]
+        alternate = b"Exact reviewed alternate"
+        self.inputs.paths["sdk/reviewed.h"].write_bytes(alternate)
+        variant = {"sha256": hashlib.sha256(alternate).hexdigest(), "provenance": "official-linux-package"}
+        record["reviewed_variants"] = [variant]
+        self.assertFalse(audit.audit(self.inputs, self.catalog)["complete"])
+        self.catalog["variant_provenance"] = {"official-linux-package": {"review_status": "candidate"}}
+        self.assertFalse(audit.audit(self.inputs, self.catalog)["complete"])
+        self.catalog["variant_provenance"]["official-linux-package"]["review_status"] = "approved"
+        other = self.root / "other.h"
+        other.write_bytes(alternate)
+        self.inputs.paths["sdk/other.h"] = other
+        self.catalog["inputs"]["sdk/other.h"] = {
+            "sha256": hashlib.sha256(b"Original other file").hexdigest(),
+            "license_files": record["license_files"]}
+        report = audit.audit(self.inputs, self.catalog)
+        self.assertFalse(report["complete"])
+        self.assertEqual(report["input_differences"][0]["path"], "sdk/other.h")
+
     def test_missing_or_changed_license_fails_closed(self):
         (self.root / "LICENSES/example.txt").unlink()
         self.assertFalse(audit.audit(self.inputs, self.catalog)["complete"])

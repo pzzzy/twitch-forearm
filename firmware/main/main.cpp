@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <array>
 #include <cinttypes>
+#include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -19,6 +20,7 @@
 #include "esp_system.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "lvgl.h"
 
@@ -26,6 +28,26 @@ namespace {
 uint16_t* snapshot;
 uint32_t capture_generation;
 uint32_t fixture_sequence;
+SemaphoreHandle_t usb_output_mutex;
+uint32_t usb_reply_errors;
+
+int usb_log_vprintf(const char* format, va_list arguments) {
+    // SDK workers share the USB endpoint with diagnostic JSON. Hold one lock
+    // across the entire log call so a reconnect log cannot split a reply.
+    xSemaphoreTake(usb_output_mutex,portMAX_DELAY);
+    const int result=vprintf(format,arguments);
+    xSemaphoreGive(usb_output_mutex);
+    return result;
+}
+bool usb_reply_write(const char* bytes,size_t length,int64_t deadline_us) {
+    size_t sent=0;
+    while(sent<length && esp_timer_get_time()<deadline_us) {
+        const auto chunk=std::min<size_t>(512,length-sent);
+        const int written=usb_serial_jtag_write_bytes(bytes+sent,chunk,pdMS_TO_TICKS(20));
+        if(written>0)sent+=static_cast<size_t>(written);
+    }
+    return sent==length;
+}
 lv_obj_t* touch_check_overlay;
 lv_obj_t* touch_check_label;
 lv_obj_t* touch_check_targets[5]{};
@@ -134,7 +156,18 @@ void flag(cJSON* o, const char* k, bool v) { cJSON_AddBoolToObject(o, k, v); }
 template <typename T> void metric(cJSON* o, const char* k, T v) { cJSON_AddNumberToObject(o, k, static_cast<double>(v)); }
 void reply(cJSON* response) {
     char* line = cJSON_PrintUnformatted(response);
-    if (line) { printf("\n@%s\n", line); fflush(stdout); cJSON_free(line); }
+    if (line) {
+        // The SDK's character-at-a-time console writer can drop characters
+        // after a short host stall. Queue bounded chunks with an overall limit.
+        const auto deadline=esp_timer_get_time()+1000000;
+        if(xSemaphoreTake(usb_output_mutex,pdMS_TO_TICKS(250))==pdTRUE) {
+            const bool sent=usb_reply_write("\n@",2,deadline) &&
+                usb_reply_write(line,strlen(line),deadline) && usb_reply_write("\n",1,deadline);
+            if(!sent)++usb_reply_errors;
+            xSemaphoreGive(usb_output_mutex);
+        } else ++usb_reply_errors;
+        cJSON_free(line);
+    } else ++usb_reply_errors;
     cJSON_Delete(response);
 }
 void set_fixture_mode(bool enabled) {
@@ -185,6 +218,7 @@ void status(cJSON* response) {
     for(unsigned i=0;i<32;++i)snprintf(elf_hash+2*i,3,"%02x",esp_app_get_description()->app_elf_sha256[i]);
     cJSON_AddStringToObject(response,"app_elf_sha256",elf_hash);
     metric(response, "uptime_ms", esp_timer_get_time()/1000);
+    metric(response,"usb_reply_errors",usb_reply_errors);
     auto touch_check=cJSON_AddObjectToObject(response,"touch_check");
     flag(touch_check,"active",touch_check_overlay!=nullptr);metric(touch_check,"accepted",touch_check_count);
     metric(touch_check,"missed",touch_check_missed);
@@ -475,9 +509,12 @@ bool submit_moderation(const forearm::ModerationRequest& request) {
 extern "C" void app_main() {
     usb_serial_jtag_driver_config_t usb_config{4096,4096};
     ESP_ERROR_CHECK(usb_serial_jtag_driver_install(&usb_config));
+    usb_output_mutex=xSemaphoreCreateMutex();
+    ESP_ERROR_CHECK(usb_output_mutex?ESP_OK:ESP_ERR_NO_MEM);
     usb_serial_jtag_vfs_use_driver();
     usb_serial_jtag_vfs_set_tx_line_endings(ESP_LINE_ENDINGS_LF);
     setvbuf(stdout,nullptr,_IONBF,0);
+    esp_log_set_vprintf(usb_log_vprintf);
     esp_log_level_set("wifi",ESP_LOG_WARN);
     esp_log_level_set("wifi_init",ESP_LOG_WARN);
     esp_log_level_set("net80211",ESP_LOG_WARN);

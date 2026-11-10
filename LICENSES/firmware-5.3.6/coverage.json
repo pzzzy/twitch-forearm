@@ -131,7 +131,7 @@
     },
     {
       "path": "LICENSES/firmware-5.3.6/linked-source-notices.txt",
-      "sha256": "b32f6101fa2f2a1c13967114ab07f018a735cfadb5c725c152721c3221fc145e"
+      "sha256": "644dae66107294762dc3e1ad418fb8aadcc2042ba31ab66a4d2c5cd0e1c97ba8"
     }
   ],
   "inputs": {
@@ -323,7 +323,7 @@
       "basis": "Explicit SPDX; select Apache alternative for Mbed TLS"
     },
     "project/firmware/main/app_ui.cpp": {
-      "sha256": "33983548d0cb2c454a5aff0d49dead17f963c967e5a2679c24010a44ee797534",
+      "sha256": "6f57746c49cc707d015a09d2e4e31f131970722a103d4935b1f5e7f6bdd13f66",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -386,7 +386,7 @@
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
     "project/firmware/main/main.cpp": {
-      "sha256": "410d066a00003e645c15f82750e09431b9e2b876ec14b5e0acb59c73b1f99880",
+      "sha256": "b8bfa25b1dfef5b005873dbbccf20f75cdd33b667b0d446a0d8d5d3fbc5fad51",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -395,7 +395,7 @@
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
     "project/firmware/main/twitch_client.cpp": {
-      "sha256": "28a1f872736b9b5bd6a6d72f5c41b4e2dd22ec6b87ad70096dae2799c3490589",
+      "sha256": "67694016da1394448ac56d7011569a0df63e6e17ec4b019f04091354e456fcf3",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -404,7 +404,7 @@
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
     "project/firmware/main/twitch_client.h": {
-      "sha256": "173b045316e4f05b3cf46cbd4f642f0b8e8cd8473df71352e50f9322643fa4e3",
+      "sha256": "b8e2bb21f3cb957e6c7b722d279d1b599875615003a9f3910159ad5579201240",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -16270,7 +16270,13 @@
         "LICENSES/firmware-5.3.6/GCC-runtime-exception-3.1.txt",
         "LICENSES/firmware-5.3.6/linked-source-notices.txt"
       ],
-      "basis": "Installed GCC13.2 runtime/header license; eligible GCC compilation"
+      "basis": "Installed GCC13.2 runtime/header license; eligible GCC compilation",
+      "reviewed_variants": [
+        {
+          "sha256": "68e2ab847922a9a946612b118eb01b37328ac18287afcb1c861ee515e1ed4943",
+          "provenance": "xtensa-esp-elf-esp-13.2.0_20250707-linux-amd64"
+        }
+      ]
     },
     "toolchain/lib/gcc/xtensa-esp-elf/13.2.0/include/float.h": {
       "sha256": "797fe35b6d174600d8124844ae4d34ed82caee39e6c71fa9dbf539215167c2e0",
@@ -17452,6 +17458,16 @@
       ],
       "basis": "Installed GCC13.2 runtime/header license; eligible GCC compilation"
     },
+    "toolchain/xtensa-esp-elf/include/c++/13.2.0/cstdarg": {
+      "sha256": "935ea07421cac810d1f4e59c33a8ef164905badb6b9488c731149a5161daa713",
+      "license": "GPL-3.0-or-later WITH GCC-exception-3.1",
+      "license_files": [
+        "LICENSES/firmware-5.3.6/GCC-GPL-3.0.txt",
+        "LICENSES/firmware-5.3.6/GCC-runtime-exception-3.1.txt",
+        "LICENSES/firmware-5.3.6/linked-source-notices.txt"
+      ],
+      "basis": "Installed GCC13.2 runtime/header license; eligible GCC compilation"
+    },
     "toolchain/xtensa-esp-elf/include/c++/13.2.0/cstddef": {
       "sha256": "4c2d040665238342a02ce6e15549b1e3759c4f46a5c976989f1b98ed2516886c",
       "license": "GPL-3.0-or-later WITH GCC-exception-3.1",
@@ -17936,7 +17952,13 @@
         "LICENSES/firmware-5.3.6/GCC-runtime-exception-3.1.txt",
         "LICENSES/firmware-5.3.6/linked-source-notices.txt"
       ],
-      "basis": "Installed GCC13.2 runtime/header license; eligible GCC compilation"
+      "basis": "Installed GCC13.2 runtime/header license; eligible GCC compilation",
+      "reviewed_variants": [
+        {
+          "sha256": "5b67ec401c8762cc9e79da1c63b09ded67f5dd2d488a3517f77eb448d2686e32",
+          "provenance": "xtensa-esp-elf-esp-13.2.0_20250707-linux-amd64"
+        }
+      ]
     },
     "toolchain/xtensa-esp-elf/include/c++/13.2.0/xtensa-esp-elf/esp32s3/no-rtti/bits/c++locale.h": {
       "sha256": "8decfb3e9e7228d6d4c1a7f1b8d45d42acfba4a505fffb5254768526b745df93",
@@ -18691,7 +18713,13 @@
         "LICENSES/firmware-5.3.6/Newlib-toolchain-COPYING.txt",
         "LICENSES/firmware-5.3.6/linked-source-notices.txt"
       ],
-      "basis": "Installed Newlib runtime/header collection and file notices"
+      "basis": "Installed Newlib runtime/header collection and file notices",
+      "reviewed_variants": [
+        {
+          "sha256": "1e8c320301b8d68daae28694016b2cd6c650a3e721982c2c0195382705044fdf",
+          "provenance": "xtensa-esp-elf-esp-13.2.0_20250707-linux-amd64"
+        }
+      ]
     },
     "toolchain/xtensa-esp-elf/lib/esp32s3/no-rtti/libc.a": {
       "sha256": "89d8a7bb4eabafa4d7615e2d555eac2c00593da6fd4793e8d528605e87b7a387",
@@ -18701,7 +18729,13 @@
         "LICENSES/firmware-5.3.6/Newlib-toolchain-COPYING.txt",
         "LICENSES/firmware-5.3.6/linked-source-notices.txt"
       ],
-      "basis": "Installed Newlib runtime/header collection and file notices"
+      "basis": "Installed Newlib runtime/header collection and file notices",
+      "reviewed_variants": [
+        {
+          "sha256": "a52ebdeed94164a6e205255b5994b4b87fcd6eb19b647500849cf13f8e95db70",
+          "provenance": "xtensa-esp-elf-esp-13.2.0_20250707-linux-amd64"
+        }
+      ]
     },
     "toolchain/xtensa-esp-elf/lib/esp32s3/no-rtti/libstdc++.a": {
       "sha256": "74e25a05d22d26efa3385d1766c8d97e42a4029d6654ed6ba7a2d81732b2453f",
@@ -18711,7 +18745,13 @@
         "LICENSES/firmware-5.3.6/GCC-runtime-exception-3.1.txt",
         "LICENSES/firmware-5.3.6/linked-source-notices.txt"
       ],
-      "basis": "Installed GCC13.2 runtime/header license; eligible GCC compilation"
+      "basis": "Installed GCC13.2 runtime/header license; eligible GCC compilation",
+      "reviewed_variants": [
+        {
+          "sha256": "b2673d5e5bf333e1d7311049a64376784205e4d758e1c82480c542764ea8ca85",
+          "provenance": "xtensa-esp-elf-esp-13.2.0_20250707-linux-amd64"
+        }
+      ]
     }
   },
   "sdk_commit": "79e3454c68248bd7d881721c9b2e94561378a8ce",
@@ -18722,6 +18762,27 @@
     "Prebuilt SDK/toolchain archives are approved by complete archive hash, not name alone.",
     "This is a baseline review, not approval of a particular release image; final audit must pass freshness and all input hashes.",
     "Final beta64 review: two added original project headers (device_login.h and touch_frame_latency.h); original UI/network/board/core updates and generated configuration reviewed. No external SDK/toolchain source or prebuilt input hash changed. Build freshness checks passed before promotion.",
-    "Profile: ESP-IDF5.3.6 default configuration,64-byte data-cache line, native row sprites and backdrop culling enabled, original opaque fallbacks retained. Final image hashes still require the exact audit after every rebuild."
-  ]
+    "Profile: ESP-IDF5.3.6 default configuration,64-byte data-cache line, native row sprites and backdrop culling enabled, original opaque fallbacks retained. Final image hashes still require the exact audit after every rebuild.",
+    "Final native input review: app_ui.cpp settings hit-target fix and main.cpp bounded serialized USB replies are original Apache-2.0 code. The only added external input is the unmodified GCC13.2 cstdarg forwarding header; its GPL-3.0-or-later notice and Runtime Library Exception3.1 are explicitly retained. All previously reviewed external input hashes and generated configuration remain unchanged. Build freshness checks passed.",
+    "Final USB deadline/OOM counter and refresh diagnostic latch review: only original Apache-2.0 main.cpp and twitch_client.cpp/.h changed, with no new input or notice change; build freshness checks passed.",
+    "Five exact Linux-amd64 runtime/header hash variants reviewed against the official SDK-manifest-pinned toolchain package. Original macOS hashes remain primary; no directory, filename-prefix or arbitrary-package approval is used."
+  ],
+  "variant_provenance": {
+    "xtensa-esp-elf-esp-13.2.0_20250707-linux-amd64": {
+      "review_status": "approved",
+      "platform": "linux-amd64",
+      "toolchain": "Espressif xtensa-esp-elf esp-13.2.0_20250707 (GCC13.2.0)",
+      "package_url": "https://github.com/espressif/crosstool-NG/releases/download/esp-13.2.0_20250707/xtensa-esp-elf-13.2.0_20250707-x86_64-linux-gnu.tar.xz",
+      "package_sha256": "d1f1378394baa3788bf78062e5d041cb14d4858bbb57f86d59e5b83fc9d5525f",
+      "package_size": 113781196,
+      "manifest_url": "https://github.com/espressif/esp-idf/blob/79e3454c68248bd7d881721c9b2e94561378a8ce/tools/tools.json",
+      "reviewed_on": "2026-11-10",
+      "review_notes": [
+        "Downloaded official package, verified whole-package size and SHA256 against the pinned SDK tools manifest, and matched each of the five exact CI input hashes to its file in that package.",
+        "libgcc.a, libc.a and libstdc++.a retain the same ordered member lists as the reviewed macOS-arm64 package (118, 733 and 190 members respectively). Runtime licenses remain GCC GPL3 with Runtime Library Exception3.1 and the Newlib collection.",
+        "c++config.h differs only in _GLIBCXX11_USE_C99_COMPLEX being defined on Linux; copyright and license comments are unchanged.",
+        "Official Linux GCC GPL3, GCC Runtime Library Exception3.1, Newlib COPYING.NEWLIB, Newlib COPYING.LIBGLOSS and LLVM/PSTL full license files are byte-identical to the distributed canonical texts."
+      ]
+    }
+  }
 }

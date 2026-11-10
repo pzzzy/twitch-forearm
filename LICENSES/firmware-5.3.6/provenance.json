@@ -141,5 +141,46 @@
       "url": "../../espressif/tlsf.git",
       "commit": "8fc595fe223cd0b3b5d7b29eb86825e4bd38e6e8"
     }
+  ],
+  "reviewed_platform_variants": [
+    {
+      "review_status": "approved",
+      "platform": "linux-amd64",
+      "toolchain": "Espressif xtensa-esp-elf esp-13.2.0_20250707 (GCC13.2.0)",
+      "package_url": "https://github.com/espressif/crosstool-NG/releases/download/esp-13.2.0_20250707/xtensa-esp-elf-13.2.0_20250707-x86_64-linux-gnu.tar.xz",
+      "package_sha256": "d1f1378394baa3788bf78062e5d041cb14d4858bbb57f86d59e5b83fc9d5525f",
+      "package_size": 113781196,
+      "manifest_url": "https://github.com/espressif/esp-idf/blob/79e3454c68248bd7d881721c9b2e94561378a8ce/tools/tools.json",
+      "reviewed_on": "2026-11-10",
+      "review_notes": [
+        "Downloaded official package, verified whole-package size and SHA256 against the pinned SDK tools manifest, and matched each of the five exact CI input hashes to its file in that package.",
+        "libgcc.a, libc.a and libstdc++.a retain the same ordered member lists as the reviewed macOS-arm64 package (118, 733 and 190 members respectively). Runtime licenses remain GCC GPL3 with Runtime Library Exception3.1 and the Newlib collection.",
+        "c++config.h differs only in _GLIBCXX11_USE_C99_COMPLEX being defined on Linux; copyright and license comments are unchanged.",
+        "Official Linux GCC GPL3, GCC Runtime Library Exception3.1, Newlib COPYING.NEWLIB, Newlib COPYING.LIBGLOSS and LLVM/PSTL full license files are byte-identical to the distributed canonical texts."
+      ],
+      "id": "xtensa-esp-elf-esp-13.2.0_20250707-linux-amd64",
+      "inputs": [
+        {
+          "path": "toolchain/lib/gcc/xtensa-esp-elf/13.2.0/esp32s3/no-rtti/libgcc.a",
+          "sha256": "68e2ab847922a9a946612b118eb01b37328ac18287afcb1c861ee515e1ed4943"
+        },
+        {
+          "path": "toolchain/xtensa-esp-elf/include/c++/13.2.0/xtensa-esp-elf/esp32s3/no-rtti/bits/c++config.h",
+          "sha256": "5b67ec401c8762cc9e79da1c63b09ded67f5dd2d488a3517f77eb448d2686e32"
+        },
+        {
+          "path": "toolchain/xtensa-esp-elf/lib/esp32s3/no-rtti/crt0.o",
+          "sha256": "1e8c320301b8d68daae28694016b2cd6c650a3e721982c2c0195382705044fdf"
+        },
+        {
+          "path": "toolchain/xtensa-esp-elf/lib/esp32s3/no-rtti/libc.a",
+          "sha256": "a52ebdeed94164a6e205255b5994b4b87fcd6eb19b647500849cf13f8e95db70"
+        },
+        {
+          "path": "toolchain/xtensa-esp-elf/lib/esp32s3/no-rtti/libstdc++.a",
+          "sha256": "b2673d5e5bf333e1d7311049a64376784205e4d758e1c82480c542764ea8ca85"
+        }
+      ]
+    }
   ]
 }

@@ -95,6 +95,54 @@ replayed. The host reader now retains bounded partial replies across serial
 timeouts; six new fake-wire regressions pass without automatic command retries.
 That tooling must still complete final device qualification.
 
+### Candidate physical controls and settings hit area
+
+The clean `57e684be6b03648cf31ecc34021b63aba8e8e5ea` image was checked with
+actual finger swipes, Go live without intervening arrivals and long-message Back.
+The user reported **“Looks and functions well.”** The interval recorded 19
+physical contacts, zero panel-flush errors and zero touch-transport errors. This
+was a manual interaction check, separate from injected-pointer replay.
+
+A later candidate keeps the settings cog's visible **52 px** control unchanged
+and extends its invisible corner hit region to **72 × 72 px**. Fifteen actual-LVGL
+host pointer tests exercise edge/corner hit positions, with drag and held-contact
+rejection. Those host contacts are not physical-finger evidence.
+
+In the separate physical settings check, the user reported **“Much better.”**
+Telemetry recorded 12 physical contacts and **zero chat-row taps** during that
+interval. The touch-error counter was already **3** in the before snapshot at
+approximately 24 seconds uptime; at approximately 56 seconds it was still **3**,
+with no additional errors or contact cancellation. This is an unchanged counter
+during the check, not a claim of zero absolute I2C errors on that boot.
+
+### Candidate USB reply integrity during reconnects
+
+The USB timeout investigation found an SDK `ESP_LOGI` certificate-validation
+message interleaved inside a JSON reply at `"ok":true`. Partial-read handling
+alone could not repair that malformed device output. The candidate now shares
+an output mutex with the SDK log hook and sends each reply in a bounded bulk
+transfer with a one-second deadline.
+
+A running-device stress check issued **120 status requests and 3 explicit
+disconnect/reconnect requests**. All **123 replies** were valid JSON, with **0
+malformed replies, 0 timeouts and 0 `usb_reply_errors`**. Of the 120 status samples,
+86 recorded an offline connection state and 34 recorded online; the final sample
+was online. No additional I2C errors were observed. No moderation action was
+replayed to obtain these results.
+
+The full smoke check of this newer candidate is active. The final native commit,
+clean reproducibility/CI checks and genuine one-hour active soak remain pending;
+these candidate observations do not substitute for the exact final image's gates.
+
+### Candidate recovery and refresh smoke
+
+The later smoke qualification passed all ten checks after fixing refresh
+admission: pause/anchor/Go live, short 20/s and 100/s fixture loads, EventSub and
+actual Wi-Fi loss/recovery, and one saved-token rotation. Refresh reported one
+attempt, one success, zero failures and restored live chat. The helper submitted
+the rotating-token request once and observed its outcome without replay. This
+short smoke run does not substitute for the final active one-hour soak.
+
 ### Candidate physical touch under arrival load
 
 The user completed 20 actual finger contacts: four cycles through the four corner

@@ -245,6 +245,7 @@ def audit(inputs: Inputs, catalog: dict) -> dict:
     approved = catalog["inputs"]
     license_files = set()
     input_differences = []
+    reviewed_variants_used = []
     for name in sorted(inputs.paths):
         record = approved.get(name)
         observed = inputs.digest(name)
@@ -253,10 +254,17 @@ def audit(inputs: Inputs, catalog: dict) -> dict:
             input_differences.append({"path": name, "expected_sha256": None,
                                       "observed_sha256": observed})
             continue
-        if record["sha256"] != observed:
+        variant = next((variant for variant in record.get("reviewed_variants", [])
+                        if variant["sha256"] == observed), None)
+        variant_approved = variant is not None and catalog.get("variant_provenance", {}).get(
+            variant.get("provenance"), {}).get("review_status") == "approved"
+        if record["sha256"] != observed and not variant_approved:
             missing.append("reviewed input changed: " + name)
             input_differences.append({"path": name, "expected_sha256": record["sha256"],
                                       "observed_sha256": observed})
+        elif record["sha256"] != observed:
+            reviewed_variants_used.append({"path": name, "sha256": observed,
+                                           "provenance": variant["provenance"]})
         license_files.update(record["license_files"])
     for record in catalog["license_files"]:
         path = PROJECT / record["path"]
@@ -289,6 +297,7 @@ def audit(inputs: Inputs, catalog: dict) -> dict:
         "standalone_objects": inputs.objects,
         "reviewed_input_count": len(inputs.paths),
         "input_differences": input_differences,
+        "reviewed_variants_used": reviewed_variants_used,
         "ca_sources": [{"path": name, "sha256": inputs.digest(name)} for name in sorted(inputs.paths)
                        if name.endswith(("/cacrt_all.pem", "/cacrt_local.pem", "/cacrt_deprecated.pem"))],
         "license_files": sorted(license_files),
