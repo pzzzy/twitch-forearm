@@ -1,0 +1,16 @@
+name: Feature request
+description: Suggest an improvement for the native wearable chat client.
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Proposed behavior and constraints
+      description: Consider readability, touch operation, memory, privacy and standalone use.
+    validations:
+      required: true

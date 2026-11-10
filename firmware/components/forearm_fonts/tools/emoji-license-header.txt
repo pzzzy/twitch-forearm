@@ -1,0 +1,11 @@
+/*
+ * SPDX-FileCopyrightText: 2013 Google LLC
+ * SPDX-License-Identifier: OFL-1.1
+ *
+ * Modified font: Forearm Emoji 24 (24 px monochrome bitmap subset).
+ * Derived from NotoEmoji[wght].ttf in Google Fonts commit
+ * 8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5 using lv_font_conv 1.5.3.
+ * This generated font data remains under the SIL Open Font License 1.1.
+ * Full copyright/license: assets/OFL.txt; source details: assets/provenance.json.
+ */
+

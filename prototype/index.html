@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Forearm — chat interaction prototype</title>
+  <style>
+    :root { color-scheme: dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #eeedf5; background: #0c0b10; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 34px 20px; }
+    button, select { font: inherit; }
+    button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+    button:focus-visible, select:focus-visible { outline: 3px solid #d5b8ff; outline-offset: 3px; }
+    .preview { max-width: 660px; margin: 0 auto; }
+    .intro { display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px; margin-bottom: 22px; }
+    h1 { font-size: 23px; letter-spacing: -.7px; margin: 0; font-weight: 650; }
+    .prototype-label { font-size: 12px; color: #9e97ad; letter-spacing: .06em; text-transform: uppercase; }
+    .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 24px; }
+    .controls label { display: flex; gap: 8px; align-items: center; font-size: 13px; color: #bdb5cc; }
+    .controls select, .controls button { min-height: 38px; border: 1px solid #37303f; border-radius: 9px; background: #17131e; color: #ece8f4; padding: 7px 10px; }
+    .controls .inject { margin-left: auto; }
+    .stage { position: relative; width: 100%; }
+    .device { position: absolute; top: 0; left: 0; width: 320px; height: 480px; transform-origin: top left; overflow: hidden; border-radius: 13px; background: #08090c; box-shadow: 0 0 0 1px #35313e, 0 22px 70px #0008; display: flex; flex-direction: column; }
+    .header { height: 64px; flex: none; padding: 9px 15px 8px; display: flex; justify-content: space-between; gap: 10px; align-items: center; background: #0e0e14; border-bottom: 1px solid #23212d; }
+    .channel-block { min-width: 0; }
+    .channel { font-size: 20px; font-weight: 650; letter-spacing: -.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .demo-label { font-size: 10px; font-weight: 650; color: #a29bb0; letter-spacing: 1.5px; margin-top: 4px; }
+    .state { color: #c6a0ff; font-size: 12px; font-weight: 700; letter-spacing: 1px; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+    .state::before { content: ""; width: 6px; height: 6px; background: currentColor; border-radius: 50%; }
+    .state.paused { color: #f0c57c; }
+    .chat { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #4a3c62 transparent; overflow-anchor: none; touch-action: pan-y; padding: 4px 0; }
+    .chat::-webkit-scrollbar { width: 3px; }
+    .chat::-webkit-scrollbar-thumb { background: #4a3c62; border-radius: 4px; }
+    .message { display: block; width: 100%; min-height: 52px; padding: 10px 15px 11px; text-align: left; border: 0; border-bottom: 1px solid #1b1922; border-radius: 0; background: transparent; color: #eeedf5; line-height: 1.28; overflow-wrap: anywhere; }
+    .message:hover { background: #15111d; }
+    .message:active { background: #21182f; }
+    .author { color: #bba0e4; font-size: 18px; font-weight: 650; display: block; margin-bottom: 3px; }
+    .message.mod .author { color: #90c6af; }
+    .body { font-size: var(--chat-size,24px); font-weight: 450; display: block; }
+    .message.deleted .body { color: #9c96a8; font-style: italic; font-size: 18px; }
+    .gap { color: #e8bd78; background: #211b12; padding: 8px 15px; font-size: 14px; }
+    .gap[hidden] { display: none; }
+    .footer { flex: none; height: 64px; background: #0e0e14; border-top: 1px solid #282231; padding: 6px 10px; }
+    .follow { width: 100%; height: 52px; border: 0; border-radius: 9px; background: #211a2e; color: #e1cdfc; font-size: 21px; font-weight: 600; display: flex; justify-content: center; align-items: center; gap: 11px; }
+    .follow.paused { background: #a979f0; color: #150c21; }
+    .follow-icon { font-size: 17px; line-height: 1; }
+    .drawer { position: absolute; inset: 0; background: #08090cf0; z-index: 2; display: flex; flex-direction: column; justify-content: flex-end; padding: 14px; }
+    .drawer[hidden] { display: none; }
+    .sheet { background: #15121c; border: 1px solid #3c304d; border-radius: 14px; padding: 15px; max-height: 100%; overflow-y: auto; box-shadow: 0 -12px 30px #0008; }
+    .sheet-kicker { font-size: 11px; letter-spacing: 1.6px; color: #bd9ce8; text-transform: uppercase; font-weight: 700; margin-bottom: 9px; }
+    .sheet-title { font-size: 24px; line-height: 1.15; font-weight: 650; margin: 0 0 8px; overflow-wrap: anywhere; }
+    .sheet-excerpt { color: #c4bdcf; font-size: 17px; line-height: 1.35; margin: 0 0 15px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .actions { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; }
+    .action { min-height: 52px; padding: 9px 8px; font-size: 17px; font-weight: 550; border: 1px solid #473950; border-radius: 9px; background: #241d2e; color: #efe8f8; }
+    .action:disabled { opacity: .45; cursor: default; }
+    .action.danger { color: #f2aaa8; background: #321e27; border-color: #57303e; }
+    .action.primary { color: #160e22; background: #be97f4; border-color: transparent; }
+    .action.cancel { color: #cac4d4; background: #19151f; }
+    .action.full { grid-column: 1 / -1; }
+    .confirm-copy { font-size: 20px; line-height: 1.3; margin: 14px 0 20px; color: #ede5f4; overflow-wrap: anywhere; }
+    .simulation { font-size: 12px; color: #b5a6c9; margin: 14px 0 0; text-align: center; }
+    .device.landscape .sheet { padding: 12px; }
+    .device.landscape .sheet-title { font-size: 21px; }
+    .device.landscape .sheet-excerpt { -webkit-line-clamp: 1; margin-bottom: 10px; }
+    .device.landscape .sheet-kicker { margin-bottom: 6px; }
+    .device.landscape .simulation { margin-top: 9px; }
+    .device.landscape .confirm-copy { margin: 8px 0 14px; }
+    .caption { display: flex; flex-wrap: wrap; gap: 6px 16px; justify-content: center; color: #9b93a8; font-size: 12px; margin-top: 22px; }
+    .notice { max-width: 500px; margin: 20px auto 0; text-align: center; font-size: 13px; color: #aaa1b8; line-height: 1.5; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    @media (max-width: 420px) { body { padding: 22px 12px; } .controls { gap: 10px; } .controls .inject { margin-left: 0; } }
+    @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+  </style>
+</head>
+<body>
+<main class="preview">
+  <div class="intro"><h1>forearm<span style="color:#ad7eea">.</span></h1><span class="prototype-label">Chat interaction prototype</span></div>
+  <div class="controls" aria-label="Prototype controls">
+    <label>View <select id="orientation"><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label>
+    <label>Type <select id="type-size"><option value="22">22 px</option><option value="24" selected>24 px</option><option value="26">26 px</option></select></label>
+    <button class="inject" id="inject" type="button">+25 messages</button>
+  </div>
+  <div class="stage" id="stage">
+    <section class="device" id="device" aria-label="Wearable chat display prototype">
+      <header class="header">
+        <div class="channel-block"><div class="channel">#studiochannel</div><div class="demo-label">OFFLINE DEMO</div></div>
+        <span class="state" id="state">LIVE</span>
+      </header>
+      <div class="gap" id="history-gap" hidden>Older messages expired</div>
+      <div class="chat" id="chat" aria-label="Simulated chat history" role="region"></div>
+      <footer class="footer"><button class="follow" id="follow" type="button"><span class="follow-icon" aria-hidden="true">Ⅱ</span><span id="follow-label">Pause chat</span></button></footer>
+      <div class="drawer" id="drawer" hidden>
+        <section class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+          <div class="sheet-kicker">Simulated moderation</div>
+          <h2 class="sheet-title" id="sheet-title"></h2>
+          <p class="sheet-excerpt" id="sheet-excerpt"></p>
+          <div id="sheet-content"></div>
+          <p class="simulation">Demo only · no Twitch action is sent</p>
+        </section>
+      </div>
+    </section>
+  </div>
+  <div class="caption"><span id="dimensions">320 × 480 logical pixels</span><span id="physical-type">24 px ≈ 3.7 mm on the panel</span></div>
+  <p class="notice">Mock chat keeps arriving while paused. Scroll back or tap a message to explore moderation. This preview demonstrates interactions; device smoothness is still to be measured.</p>
+  <div class="sr-only" id="announcement" role="status" aria-live="polite"></div>
+</main>
+<script>
+(() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const chat = $('chat');
+  const device = $('device');
+  const history = [];
+  const nodes = new Map();
+  const LIMIT = 120;
+  const BYTE_LIMIT = 256 * 1024;
+  const encoder = new TextEncoder();
+  const samples = [
+    ['mosslight', 'The view from here is unreal.', false],
+    ['pixelparty', 'Tiny screen, big adventure ✨', false],
+    ['river_mod', 'Welcome in! Keep it kind, everyone.', true],
+    ['juniper', 'Can we take the long way back?', false],
+    ['orbit_fox', 'Chat on your wrist is such a good idea', false],
+    ['sageandsea', 'That golden light!!', false],
+    ['bytegarden', 'A little hello from the other side of the world 🌍', false],
+    ['mosslight', 'Enjoy the moment. We’re right here.', false],
+    ['cozy_static', 'This is my favorite kind of stream.', false],
+    ['river_mod', 'Audio sounds good from here 👍', true]
+  ];
+  let serial = 0;
+  let bytes = 0;
+  let live = true;
+  let unread = 0;
+  let selected = null;
+  let sheetView = null;
+  let pendingAction = null;
+  let contact = null;
+  let restoreFocus = null;
+  let actionTimer = null;
+  let mockTimer = null;
+  let orientation = 'portrait';
+  let screenWidth = 320;
+  let screenHeight = 480;
+  let confirmOnLeft = false;
+
+  function announce(text) { $('announcement').textContent = text; }
+  function updateState() {
+    $('state').textContent = live ? 'LIVE' : 'PAUSED';
+    $('state').classList.toggle('paused', !live);
+    $('follow').classList.toggle('paused', !live);
+    $('follow-label').textContent = live ? 'Pause chat' : unread ? `Go live · ${unread} new` : 'Go live';
+    $('follow').firstElementChild.textContent = live ? 'Ⅱ' : '↓';
+  }
+  function pause() { if (live) { live = false; unread = 0; updateState(); } }
+  function tail() { chat.scrollTop = chat.scrollHeight; }
+  function getAnchor() {
+    const top = chat.getBoundingClientRect().top;
+    for (const node of chat.children) {
+      if (node.getBoundingClientRect().bottom > top + 1) {
+        return { id: node.dataset.id, offset: (node.getBoundingClientRect().top - top) / currentScale() };
+      }
+    }
+    return null;
+  }
+  function restoreAnchor(anchor) {
+    if (!anchor) return;
+    const node = nodes.get(anchor.id);
+    if (node) {
+      chat.scrollTop += (node.getBoundingClientRect().top - chat.getBoundingClientRect().top) / currentScale() - anchor.offset;
+    } else {
+      chat.scrollTop = 0;
+      $('history-gap').hidden = false;
+      announce('Older messages expired. Chat remains paused.');
+    }
+  }
+  function messageNode(message) {
+    const node = document.createElement('button');
+    node.type = 'button';
+    node.className = 'message' + (message.mod ? ' mod' : '');
+    node.dataset.id = message.id;
+    const author = document.createElement('span');
+    author.className = 'author';
+    author.textContent = message.name + (message.mod ? ' · MOD' : '');
+    const body = document.createElement('span');
+    body.className = 'body';
+    body.textContent = message.text;
+    node.append(author, body);
+    node.setAttribute('aria-label', `${message.name}: ${message.text}. Open simulated moderation.`);
+    return node;
+  }
+  function appendMessages(count = 1) {
+    const anchor = live ? null : getAnchor();
+    for (let i = 0; i < count; i++) {
+      const source = samples[serial % samples.length];
+      const id = String(++serial);
+      const message = { id, userId: 'demo-user-' + source[0], channelId: 'demo-studiochannel', name: source[0], text: source[1], mod: source[2], deleted: false };
+      message.bytes = encoder.encode(JSON.stringify(message)).length;
+      history.push(message);
+      bytes += message.bytes;
+      const node = messageNode(message);
+      nodes.set(id, node);
+      chat.appendChild(node);
+      if (!live) unread++;
+      while (history.length > LIMIT || bytes > BYTE_LIMIT) {
+        const old = history.shift();
+        bytes -= old.bytes;
+        nodes.get(old.id).remove();
+        nodes.delete(old.id);
+      }
+    }
+    if (live) tail(); else restoreAnchor(anchor);
+    updateState();
+  }
+  function goLive() {
+    closeSheet(false);
+    live = true;
+    unread = 0;
+    $('history-gap').hidden = true;
+    tail();
+    updateState();
+    announce('Following live chat.');
+  }
+  function makeButton(label, className, callback, disabled = false) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'action ' + className;
+    button.textContent = label;
+    button.disabled = disabled;
+    button.addEventListener('click', callback);
+    return button;
+  }
+  function requestConfirmation(action, event) {
+    const source = event.currentTarget.getBoundingClientRect();
+    const screen = device.getBoundingClientRect();
+    // Confirmation uses the opposite column from the action/duration that
+    // opened it. Repeating a tap at the same coordinates cannot confirm it.
+    confirmOnLeft = source.left + source.width / 2 > screen.left + screen.width / 2;
+    showSheet('confirm', action);
+  }
+  function showSheet(view, action = null) {
+    sheetView = view;
+    pendingAction = action;
+    const content = $('sheet-content');
+    content.replaceChildren();
+    $('drawer').hidden = false;
+    $('drawer').dataset.view = view;
+    chat.inert = true;
+    $('follow').disabled = true;
+    $('sheet-title').textContent = selected.name;
+    $('sheet-excerpt').textContent = selected.deleted ? 'Message deleted in demo' : selected.text;
+    const actions = document.createElement('div');
+    actions.className = 'actions';
+    content.appendChild(actions);
+    if (view === 'menu') {
+      const deleted = selected.deleted || history.find(item => item.id === selected.id)?.deleted;
+      actions.append(
+        makeButton('Delete message', '', event => requestConfirmation({ kind: 'delete' }, event), deleted || selected.mod),
+        makeButton('Timeout…', '', () => showSheet('timeout'), selected.mod),
+        makeButton('Ban…', 'danger', event => requestConfirmation({ kind: 'ban' }, event), selected.mod),
+        makeButton('Cancel', 'cancel', () => closeSheet())
+      );
+    } else if (view === 'timeout') {
+      $('sheet-title').textContent = 'Timeout duration';
+      actions.append(
+        makeButton('30 seconds', '', event => requestConfirmation({ kind: 'timeout', seconds: 30 }, event)),
+        makeButton('1 minute', '', event => requestConfirmation({ kind: 'timeout', seconds: 60 }, event)),
+        makeButton('10 minutes', '', event => requestConfirmation({ kind: 'timeout', seconds: 600 }, event)),
+        makeButton('Back', 'cancel', () => showSheet('menu'))
+      );
+    } else if (view === 'confirm') {
+      $('sheet-title').textContent = 'Confirm action';
+      $('sheet-excerpt').textContent = '#studiochannel · demo';
+      const copy = document.createElement('p');
+      copy.className = 'confirm-copy';
+      copy.textContent = action.kind === 'delete' ? `Delete this message from ${selected.name}?` : action.kind === 'ban' ? `Ban ${selected.name} from #studiochannel?` : `Timeout ${selected.name} for ${action.seconds === 30 ? '30 seconds' : action.seconds === 60 ? '1 minute' : '10 minutes'}?`;
+      content.prepend(copy);
+      const back = makeButton('Back', 'cancel', () => showSheet('menu'));
+      const confirm = makeButton('Confirm demo', 'danger', executeSimulation);
+      back.style.gridColumn = confirmOnLeft ? '2' : '1';
+      confirm.style.gridColumn = confirmOnLeft ? '1' : '2';
+      back.style.gridRow = confirm.style.gridRow = '1';
+      actions.append(back, confirm);
+    } else if (view === 'pending') {
+      $('sheet-title').textContent = 'Simulating…';
+      actions.append(makeButton('Please wait', 'full', () => {}, true));
+    } else if (view === 'result') {
+      $('sheet-title').textContent = 'Simulation complete';
+      $('sheet-excerpt').textContent = 'No Twitch account was contacted. Chat remains paused.';
+      actions.append(makeButton('Return to chat', 'primary full', () => closeSheet()));
+    }
+    const first = actions.querySelector('button:not(:disabled)');
+    if (first) first.focus({ preventScroll: true });
+  }
+  function openMessage(id) {
+    const message = history.find(item => item.id === id);
+    if (!message) return;
+    pause();
+    selected = { ...message };
+    restoreFocus = nodes.get(id);
+    showSheet('menu');
+    announce(`Selected ${message.name}. All moderation is simulated.`);
+  }
+  function closeSheet(focus = true) {
+    if (sheetView === 'pending') return;
+    $('drawer').hidden = true;
+    chat.inert = false;
+    $('follow').disabled = false;
+    selected = null;
+    pendingAction = null;
+    sheetView = null;
+    if (focus) (restoreFocus?.isConnected ? restoreFocus : $('follow')).focus({ preventScroll: true });
+  }
+  function executeSimulation() {
+    if (sheetView !== 'confirm' || !selected || !pendingAction) return;
+    const target = { ...selected };
+    const action = { ...pendingAction };
+    showSheet('pending', action);
+    actionTimer = setTimeout(() => {
+      if (action.kind === 'delete') {
+        const message = history.find(item => item.id === target.id);
+        const node = nodes.get(target.id);
+        if (message && node) {
+          const height = node.getBoundingClientRect().height / currentScale();
+          node.style.minHeight = height + 'px';
+          bytes -= message.bytes;
+          message.deleted = true;
+          message.text = '';
+          message.bytes = encoder.encode(JSON.stringify({ ...message, bytes: undefined })).length;
+          bytes += message.bytes;
+          if (selected?.id === target.id) { selected.deleted = true; selected.text = ''; }
+          node.classList.add('deleted');
+          node.querySelector('.body').textContent = 'Message deleted in demo';
+          node.setAttribute('aria-label', `${message.name}: message deleted in demo.`);
+        }
+      }
+      showSheet('result', action);
+      announce(`${action.kind} simulation complete for ${target.name}. No Twitch action was sent.`);
+      actionTimer = null;
+    }, 450);
+  }
+  function currentScale() { return Math.min(1, $('stage').clientWidth / screenWidth); }
+  function fitScreen() {
+    const scale = currentScale();
+    device.style.width = screenWidth + 'px';
+    device.style.height = screenHeight + 'px';
+    device.style.transform = `translateX(${Math.max(0, ($('stage').clientWidth - screenWidth * scale) / 2)}px) scale(${scale})`;
+    $('stage').style.height = (screenHeight * scale) + 'px';
+  }
+  $('follow').addEventListener('click', () => { if (live) { pause(); announce('Chat paused.'); } else goLive(); });
+  $('inject').addEventListener('click', () => appendMessages(25));
+  $('orientation').addEventListener('change', event => {
+    const anchor = live ? null : getAnchor();
+    orientation = event.target.value;
+    screenWidth = orientation === 'portrait' ? 320 : 480;
+    screenHeight = orientation === 'portrait' ? 480 : 320;
+    device.classList.toggle('landscape', orientation === 'landscape');
+    fitScreen();
+    $('dimensions').textContent = `${screenWidth} × ${screenHeight} logical pixels`;
+    if (live) tail(); else restoreAnchor(anchor);
+  });
+  $('type-size').addEventListener('change', event => {
+    const anchor = live ? null : getAnchor();
+    device.style.setProperty('--chat-size', event.target.value + 'px');
+    $('physical-type').textContent = `${event.target.value} px ≈ ${(Number(event.target.value) * 25.4 / 166).toFixed(1)} mm on the panel`;
+    if (live) tail(); else restoreAnchor(anchor);
+  });
+  chat.addEventListener('pointerdown', event => {
+    pause();
+    contact = { x: event.clientX, y: event.clientY, start: performance.now(), moved: false, id: event.target.closest('.message')?.dataset.id };
+  });
+  chat.addEventListener('pointermove', event => {
+    if (contact && Math.hypot(event.clientX - contact.x, event.clientY - contact.y) > 13 * currentScale()) contact.moved = true;
+  });
+  chat.addEventListener('pointercancel', () => { if (contact) contact.moved = true; });
+  chat.addEventListener('wheel', pause, { passive: true });
+  chat.addEventListener('keydown', event => { if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key)) pause(); });
+  chat.addEventListener('click', event => {
+    const node = event.target.closest('.message');
+    if (!node) return;
+    if (event.detail !== 0 && (!contact || contact.moved || contact.id !== node.dataset.id || performance.now() - contact.start > 600)) { contact = null; return; }
+    contact = null;
+    openMessage(node.dataset.id);
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && sheetView && sheetView !== 'pending') { event.preventDefault(); closeSheet(); }
+    if (event.key === 'Tab' && sheetView) {
+      const buttons = [...$('sheet').querySelectorAll('button:not(:disabled)')];
+      if (!buttons.length) { event.preventDefault(); return; }
+      const first = buttons[0], last = buttons[buttons.length - 1];
+      if (!$('sheet').contains(document.activeElement)) { event.preventDefault(); (event.shiftKey ? last : first).focus(); }
+      else if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    }
+  });
+  new ResizeObserver(fitScreen).observe($('stage'));
+  fitScreen();
+  appendMessages(14);
+  mockTimer = setInterval(() => { if (!document.hidden) appendMessages(); }, 3100);
+  window.addEventListener('pagehide', () => { clearInterval(mockTimer); clearTimeout(actionTimer); });
+  // Read-only state plus deterministic mock arrivals for offline UI checks.
+  window.forearmDemo = Object.freeze({
+    inject: appendMessages,
+    state: () => ({ live, unread, retained: history.length, bytes, limit: LIMIT, anchor: getAnchor(), selected: selected ? { id: selected.id, userId: selected.userId, channelId: selected.channelId } : null, view: sheetView, orientation })
+  });
+})();
+</script>
+</body>
+</html>

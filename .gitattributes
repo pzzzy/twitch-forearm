@@ -1,0 +1,16 @@
+* text=auto
+*.sh text eol=lf
+*.py text eol=lf
+*.mjs text eol=lf
+*.yml text eol=lf
+*.ttf binary
+*.png binary
+# Preserve exact upstream license bytes and generated/vendor text.
+LICENSES/** -text -whitespace
+firmware/components/forearm_fonts/assets/* -text -whitespace
+firmware/components/forearm_fonts/forearm_emoji_24.c -whitespace
+firmware/components/forearm_fonts/forearm_text_24.c -whitespace
+firmware/components/forearm_fonts/tools/*license-header.txt -whitespace
+firmware/components/forearm_panel/esp_lcd_axs15231b.c -whitespace
+firmware/components/forearm_fonts/forearm_emoji_24.c linguist-generated=true
+firmware/components/forearm_fonts/forearm_text_24.c linguist-generated=true

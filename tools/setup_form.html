@@ -1,0 +1,10 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Forearm Chat setup</title>
+<style>body{font:17px system-ui;background:#100d18;color:#eee;max-width:460px;margin:50px auto;padding:20px}label{display:block;margin:20px 0}input,button{font:inherit;box-sizing:border-box;width:100%;padding:12px;border-radius:8px;border:1px solid #665879;background:#211a2c;color:#eee;margin-top:6px}button{background:#b58ae9;color:#170f23;cursor:pointer}small{color:#c2b6d1}</style>
+<h1>Forearm Chat setup</h1><p>Connect the wearable to Wi-Fi or a phone hotspot.</p>
+<form method="post"><input type="hidden" name="session" value="{{SESSION}}">
+<label>Wi-Fi name (2.4 GHz)<input name="ssid" maxlength="32" autocomplete="off" required autofocus></label>
+<label>Wi-Fi password<input name="password" type="password" maxlength="63" autocomplete="off"></label>
+<small>Leave the password empty only for an open network. Credentials go over USB to your display and are stored there; this helper does not save them on the Mac.</small>
+<label>Twitch channel<input name="channel" value="{{CHANNEL}}" maxlength="25" pattern="[A-Za-z0-9_]{1,25}" autocomplete="off" autocapitalize="none" required></label>
+<label>Public Twitch Client ID<input name="client_id" value="{{CLIENT_ID}}" maxlength="64" pattern="[A-Za-z0-9]{1,64}" autocomplete="off" autocapitalize="none" required></label>
+<button type="submit">Connect the display</button></form></html>

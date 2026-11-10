@@ -1,0 +1,31 @@
+name: Bug report
+description: Report a reproducible firmware, UI or setup problem.
+body:
+  - type: markdown
+    attributes:
+      value: "For vulnerabilities, follow SECURITY.md. Do not attach credentials, flash dumps, device identifiers or private chat."
+  - type: input
+    id: version
+    attributes:
+      label: Firmware version or commit
+    validations:
+      required: true
+  - type: input
+    id: hardware
+    attributes:
+      label: Board model, memory and orientation
+      description: "For example: JC3248W535, 16 MB flash / 8 MB PSRAM, portrait. Omit serial/MAC."
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps, expected behavior and observed behavior
+      description: Say whether input was physical or injected and whether chat was live or demo.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Redacted evidence and frequency
+      description: Include only relevant logs or measurements without account or chat data.

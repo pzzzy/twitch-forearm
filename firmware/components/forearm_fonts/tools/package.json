@@ -1,0 +1,9 @@
+{
+  "name": "forearm-font-builder",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pinned LVGL font conversion tool; not required for firmware builds",
+  "devDependencies": {
+    "lv_font_conv": "1.5.3"
+  }
+}

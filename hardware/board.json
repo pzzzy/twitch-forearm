@@ -1,0 +1,416 @@
+{
+  "schema_version": 1,
+  "prepared_date": "2026-11-10",
+  "board_family": "Guition / Shenzhen Jingcai JC3248W535",
+  "reference_sku": "JC3248W535C_I_Y (capacitive-touch specification)",
+  "connected_board_revision_verified": false,
+  "evidence_policy": "Observed ROM/USB identity, native runtime and physical interaction evidence are distinguished from manufacturer reference values and remaining qualification. No controller identity-register readback or exhaustive hardware soak is asserted.",
+  "physical_observations": {
+    "source": "USB/ROM probing, captured factory application, native firmware telemetry, checked framebuffer captures, running-device replay and user-confirmed physical Back interaction.",
+    "chip": "ESP32-S3 QFN56",
+    "silicon_revision": "0.2",
+    "memory_variant": "N16R8",
+    "flash_bytes": 16777216,
+    "psram_bytes": 8388608,
+    "psram_evidence": "8MiB identified by ROM and used successfully for native framebuffer, chat history, TLS and cached images; no exhaustive memory stress or long soak.",
+    "usb_vid": "303a",
+    "usb_pid": "1001",
+    "serial_port": null,
+    "mac_address": null,
+    "sd_card": {
+      "factory_reported_type": "SDSC",
+      "factory_reported_size_mb": 478,
+      "capacity_remeasured": false
+    },
+    "display_controller_readback": false,
+    "touch_i2c_probe_performed": true,
+    "new_firmware_uploaded": true,
+    "factory_firmware_identification": {
+      "model_string": "JC3248W535",
+      "source_path_string": "/src/driver/screen_init/axs15231b/esp_bsp.c",
+      "driver_symbols": [
+        "panel_axs15231b_draw_bitmap",
+        "touch_axs15231b_read_data",
+        "esp_lcd_touch_new_i2c_axs15231b"
+      ],
+      "interpretation": "Captured factory app0 contains this board/model and AXS15231B panel/touch driver. Strong independent match to reference, without controller register readback."
+    },
+    "factory_flash_backup": {
+      "captured_bytes": 16777216,
+      "raw_verification_status": "verified",
+      "evidence_note": "Full 16MiB raw device MD5 matched saved snapshot in a single bootloader session; SHA256 and recovery details are in private .local/hardware-2026-11-10/manifest.json. Initial post-reboot NVS changes were reread before final verification. SD card excluded."
+    },
+    "psram_runtime_use_verified": true,
+    "psram_exhaustive_stress_qualified": false,
+    "touch_i2c_probe_note": "Native physical controller communication at SDA4/SCL8/address0x3B; not a controller identity-register readback.",
+    "native_runtime": {
+      "firmware": "forearm-chat/0.3.2",
+      "orientation": "portrait",
+      "width_px": 320,
+      "height_px": 480,
+      "framebuffer_rgb565_capture_visually_inspected": true,
+      "touch_sampler_operational": true,
+      "controller_register_readback": false,
+      "operational_touch": {
+        "sda_gpio": 4,
+        "scl_gpio": 8,
+        "address_7bit": "0x3b",
+        "bus_hz": 400000,
+        "full_corner_calibration_qualified": false
+      },
+      "physical_confirmation": {
+        "interaction": "Long-message Back after explicit Up/no-data parser correction",
+        "source": "User physically confirmed: Long-message Back works now",
+        "scope": "Specific interaction only; not all gestures, positions, mounting or moisture conditions"
+      },
+      "scripted_replay": {
+        "firmware": "forearm-chat/0.3.0",
+        "report": ".local/hardware-check-030/report.json",
+        "passed": true,
+        "input_method": "explicit LVGL diagnostic injection; controller reads remain separate",
+        "physical_contact_count": 0,
+        "checks": {
+          "pause_anchor_and_unread": true,
+          "go_live_twenty_single_taps": true,
+          "go_live_without_new_messages_cycles": 18,
+          "drag_pauses_and_scrolls_without_selecting": true,
+          "max-ascii": {
+            "characters": 500,
+            "utf8_bytes": 500,
+            "accepted": true
+          },
+          "max-emoji": {
+            "characters": 500,
+            "utf8_bytes": 2000,
+            "accepted": true
+          },
+          "mixed-unicode": {
+            "characters": 56,
+            "utf8_bytes": 107,
+            "accepted": true
+          },
+          "static_twitch_emote": {
+            "ready": 1,
+            "downloads": 1,
+            "visible_images": 1
+          },
+          "scroll_load": {
+            "duration_seconds": 10.965571125,
+            "presented_frames": 170,
+            "observed_frames_per_second": 15.50306847332587,
+            "ui_frame_p95_us": 64075,
+            "flush_p95_us": 32322
+          }
+        }
+      },
+      "sprite_cache_comparison": {
+        "report": ".local/cache-hardware-032/report.json",
+        "firmware": "0.3.2",
+        "workload": "real received chat, repeated 6px programmatic scroll steps; no sent Twitch messages",
+        "runs": [
+          {
+            "cache_enabled": false,
+            "frames": 150,
+            "duration_seconds": 9.780773917000001,
+            "presented_fps": 15.33620971846455,
+            "ui_frame_p95_us": 63392,
+            "panel_flush_p95_us": 28784
+          },
+          {
+            "cache_enabled": true,
+            "frames": 150,
+            "duration_seconds": 9.746126,
+            "presented_fps": 15.390730634920994,
+            "ui_frame_p95_us": 63379,
+            "panel_flush_p95_us": 33637
+          },
+          {
+            "cache_enabled": false,
+            "frames": 150,
+            "duration_seconds": 9.780030666999998,
+            "presented_fps": 15.337375219704924,
+            "ui_frame_p95_us": 63408,
+            "panel_flush_p95_us": 28878
+          },
+          {
+            "cache_enabled": true,
+            "frames": 150,
+            "duration_seconds": 9.7462935,
+            "presented_fps": 15.390466129508617,
+            "ui_frame_p95_us": 63380,
+            "panel_flush_p95_us": 33720
+          }
+        ],
+        "pixel_diff_bbox": null,
+        "decoded_row_sprite_bytes_when_enabled": 271728,
+        "conclusion": "Negligible presented-frame-rate improvement; final shipped row-sprite cache default is disabled. Static Twitch emote cache is separate and enabled.",
+        "performance_target_30fps_met": false
+      },
+      "final_handoff": {
+        "status_report": ".local/final-native-status.json",
+        "firmware": "forearm-chat/0.3.2",
+        "channel": null,
+        "login": null,
+        "authenticated": true,
+        "chat_connected": true,
+        "demo": false,
+        "live_following": true,
+        "sprite_cache_enabled": false,
+        "diagnostic_touch_injection_disabled": true,
+        "additional_injected_go_live_cycles_passed": 5,
+        "flush_errors": 0,
+        "touch_transport_errors": 0,
+        "free_internal_bytes": 61251,
+        "free_psram_bytes": 6701792,
+        "largest_dma_block_bytes": 24576,
+        "twitch_worker_stack_headroom_bytes": 11648,
+        "received_messages_since_latest_boot": 0,
+        "snapshot_not_soak_minimum": true
+      },
+      "twitch": {
+        "scope": "user:read:chat",
+        "live_messages_received_in_prior_session": true,
+        "saved_authorization_survived_app_reflash": true,
+        "moderation_enabled": false,
+        "server_history_replay": false
+      },
+      "no_sd_operations": true,
+      "no_efuse_changes": true,
+      "battery_power_thermal_work_performed": false
+    }
+  },
+  "reference_hardware": {
+    "mcu_module": "ESP32-S3-WROOM-1",
+    "display": {
+      "controller": "AXS15231B",
+      "technology": "IPS TFT",
+      "diagonal_inches": 3.5,
+      "native_width_px": 320,
+      "native_height_px": 480,
+      "color_format": "RGB565",
+      "bits_per_pixel": 16,
+      "native_active_area_mm": [
+        49.0,
+        73.4
+      ],
+      "landscape_active_area_mm": [
+        73.4,
+        49.0
+      ],
+      "module_enclosure_landscape_mm": [
+        94.5,
+        62.0
+      ],
+      "bus": "QSPI",
+      "spi_host": "SPI2_HOST",
+      "spi_mode": 3,
+      "vendor_clock_hz": 40000000,
+      "pins": {
+        "cs": 45,
+        "clock": 47,
+        "data0": 21,
+        "data1": 48,
+        "data2": 40,
+        "data3": 39,
+        "tearing_effect": 38,
+        "backlight_pwm": 1,
+        "reset": null,
+        "dc": null
+      },
+      "reset_note": "BSP has no dedicated reset GPIO; schematic connects panel RST to board RST/EN.",
+      "dc_note": "BSP header defines QSPI_DC=8 but QSPI IO config uses dc_gpio_num=-1. GPIO8 is assigned to touch SCL in actual BSP configuration.",
+      "backlight": {
+        "active_high": true,
+        "vendor_pwm_hz": 5000,
+        "vendor_pwm_resolution_bits": 10
+      },
+      "vendor_lvgl_full_refresh": true,
+      "vendor_framebuffer_bytes": 307200,
+      "vendor_dma_staging_buffers": 2,
+      "vendor_dma_staging_bytes_each": 30720,
+      "vendor_software_rotation_degrees": 90,
+      "partial_rectangle_flush_qualified": false,
+      "refresh_note": "Vendor QSPI draw path skips RASET, begins RAMWR at native y=0 and uses RAMWRC for later chunks. Start with full-frame ordered transfers and TE synchronization; arbitrary partial updates require separate validation.",
+      "measured_frame_rate_fps": 15.336792469084738,
+      "measured_frame_rate_context": "Mean of two v0.3.2 cache-OFF runs, 150 presented frames each, real received chat and active TLS, repeated six-pixel programmatic scrolling; not physical-finger latency or busy-channel soak."
+    },
+    "touch": {
+      "controller": "AXS15231B touch interface",
+      "bus": "I2C",
+      "i2c_port": 0,
+      "i2c_address_7bit": "0x3b",
+      "clock_hz": 400000,
+      "pins_from_bsp": {
+        "sda": 4,
+        "scl": 8,
+        "reset": null,
+        "interrupt": null
+      },
+      "pins_as_schematic_labels": {
+        "TP_SCL": 4,
+        "TP_SDA": 8,
+        "TP_INT": 3
+      },
+      "pin_label_conflict": true,
+      "conflict_resolution": "SDA4/SCL8 is operational in the native driver on this unit at0x3B; schematic net labels remain reversed relative to the confirmed software mapping. Complete coordinate calibration and PCB-revision matching remain separate.",
+      "interrupt_note": "Schematic has GPIO3-to-TP_INT through R17; BSP sets interrupt=-1 and polls.",
+      "external_pullups_shown_ohms": 4700
+    },
+    "micro_sd": {
+      "bus": "SPI",
+      "pins": {
+        "cs": 10,
+        "clock": 12,
+        "mosi": 11,
+        "miso": 13
+      },
+      "formatting_authorized": false
+    },
+    "audio": {
+      "interface": "I2S speaker amplifier",
+      "pins": {
+        "lrclk": 2,
+        "bclk": 42,
+        "data_out": 41
+      },
+      "speaker_connector": "P6, 2-pin JST 1.25 mm reference",
+      "amplifier_part_number_physically_verified": false
+    },
+    "battery": {
+      "connector": "P5, 2-pin JST 1.25 mm reference",
+      "chemistry_reference": "Lithium rechargeable per manufacturer; nominal cell voltage/count not independently verified",
+      "schematic_connector_pins": {
+        "1": "BAT+",
+        "2": "GND"
+      },
+      "physical_polarity_verified": false,
+      "battery_installed": null,
+      "charging_and_protection": "Manufacturer claims lithium charging/discharging and overcharge/overdischarge protection; controller part and actual protection behavior unverified.",
+      "adc_gpio": 5,
+      "adc_divider_top_ohms": 33000,
+      "adc_divider_bottom_ohms": 100000,
+      "nominal_voltage_multiplier": 1.33,
+      "adc_calibrated": false,
+      "power_button": "SW1 connects charger/power-controller KEY input; not identified as an ESP32 GPIO.",
+      "capacity_mah": null,
+      "measured_runtime_hours": null
+    },
+    "usb": {
+      "connector": "USB-C",
+      "pins": {
+        "dm": 19,
+        "dp": 20
+      }
+    },
+    "expansion": {
+      "P2_gpio_order": [
+        5,
+        6,
+        7,
+        15,
+        16,
+        46,
+        9,
+        14
+      ],
+      "P3_P4_signals": [
+        "GND",
+        "3.3V",
+        "GPIO17",
+        "GPIO18"
+      ]
+    }
+  },
+  "sources": {
+    "official_specification_url": "https://www.guition.com/icms/upload/fb081940d6fc11f09850077a33e1404f/FTPData/UEditor/file/2026121/1768961095054/JC3248W535%20Specifications-EN.pdf",
+    "official_specification_access": "Viewed through web PDF reader; direct local download returned HTTP403. Local PDF is commit-pinned mirror copy, not asserted byte-identical to current official URL.",
+    "manufacturer_zip_url": "http://pan.jczn1688.com/directlink/1/HMI%20display/JC3248W535EN.zip",
+    "manufacturer_zip_access": "HTTP403 from both HTTP and HTTPS attempts; ZIP contents not directly verified.",
+    "mirror_repository": "https://github.com/NorthernMan54/JC3248W535EN",
+    "mirror_commit": "56161e8269dbb2c32296dcc6e44d4a00f1a2b97e",
+    "local_manifest": ".local/vendor-reference/manifest.json",
+    "reference_files": [
+      {
+        "source_path": "JC3248W535EN/1-Demo/Demo_Arduino/DEMO_LVGL/esp_bsp.h",
+        "url": "https://raw.githubusercontent.com/NorthernMan54/JC3248W535EN/56161e8269dbb2c32296dcc6e44d4a00f1a2b97e/JC3248W535EN/1-Demo/Demo_Arduino/DEMO_LVGL/esp_bsp.h",
+        "git_blob_sha1": "fd0e28643701248d36c91c518ef32652aa8bcaf9",
+        "sha256": "2da0e2e529bbc73b88d999c2429f092b4fc1f7b95a0e8dabb043b3126e83b61a"
+      },
+      {
+        "source_path": "JC3248W535EN/1-Demo/Demo_Arduino/DEMO_LVGL/esp_bsp.c",
+        "url": "https://raw.githubusercontent.com/NorthernMan54/JC3248W535EN/56161e8269dbb2c32296dcc6e44d4a00f1a2b97e/JC3248W535EN/1-Demo/Demo_Arduino/DEMO_LVGL/esp_bsp.c",
+        "git_blob_sha1": "cd2e03943db8aa90484504e1d03d3bc62d9cb664",
+        "sha256": "0e67b0fb1fa5ce01fd1afbcda147e5b024b7b00fa8e90e1c36f81d08c0502b2f"
+      },
+      {
+        "source_path": "JC3248W535EN/1-Demo/Demo_Arduino/DEMO_LVGL/display.h",
+        "url": "https://raw.githubusercontent.com/NorthernMan54/JC3248W535EN/56161e8269dbb2c32296dcc6e44d4a00f1a2b97e/JC3248W535EN/1-Demo/Demo_Arduino/DEMO_LVGL/display.h",
+        "git_blob_sha1": "70630fe8c43565ce895310688f601e571c54d275",
+        "sha256": "29f93fd86c24c48fedc4b6fe58aa445acaa8267ece31dfdc660116e426cfaa42"
+      },
+      {
+        "source_path": "JC3248W535EN/1-Demo/Demo_Arduino/DEMO_LVGL/lv_port.h",
+        "url": "https://raw.githubusercontent.com/NorthernMan54/JC3248W535EN/56161e8269dbb2c32296dcc6e44d4a00f1a2b97e/JC3248W535EN/1-Demo/Demo_Arduino/DEMO_LVGL/lv_port.h",
+        "git_blob_sha1": "ea5a305acccdc6face6d794e2c15946982e30065",
+        "sha256": "48a77fff478799712bff844e001ee94bf6f3634fed9ffee99b6bbc5c42eae571"
+      },
+      {
+        "source_path": "JC3248W535EN/1-Demo/Demo_Arduino/DEMO_LVGL/lv_port.c",
+        "url": "https://raw.githubusercontent.com/NorthernMan54/JC3248W535EN/56161e8269dbb2c32296dcc6e44d4a00f1a2b97e/JC3248W535EN/1-Demo/Demo_Arduino/DEMO_LVGL/lv_port.c",
+        "git_blob_sha1": "f11655e5ea494c24e39a2b86841dc72dcbb8d8a9",
+        "sha256": "eff32844dd424b85f83ad189b9f46ade08876d50c4649282907de9908ca38438"
+      },
+      {
+        "source_path": "JC3248W535EN/1-Demo/Demo_Arduino/DEMO_LVGL/esp_lcd_axs15231b.h",
+        "url": "https://raw.githubusercontent.com/NorthernMan54/JC3248W535EN/56161e8269dbb2c32296dcc6e44d4a00f1a2b97e/JC3248W535EN/1-Demo/Demo_Arduino/DEMO_LVGL/esp_lcd_axs15231b.h",
+        "git_blob_sha1": "f6b48cd905e4f30991ea88eaa8040a8560e41031",
+        "sha256": "4e22f6494ddaf3053f3b058ecb043f8dc86d6fbb7b78fdc2a83cee8b74dff037"
+      },
+      {
+        "source_path": "JC3248W535EN/1-Demo/Demo_Arduino/DEMO_LVGL/esp_lcd_axs15231b.c",
+        "url": "https://raw.githubusercontent.com/NorthernMan54/JC3248W535EN/56161e8269dbb2c32296dcc6e44d4a00f1a2b97e/JC3248W535EN/1-Demo/Demo_Arduino/DEMO_LVGL/esp_lcd_axs15231b.c",
+        "git_blob_sha1": "ae3f4a1fd52f66dfb1911548b194fae4570adbdf",
+        "sha256": "51dd1dd9239b95852874f681ed1c7932baa545e2e7d93855e2fcfecf07d4be14"
+      },
+      {
+        "source_path": "JC3248W535EN/1-Demo/Demo_Arduino/DEMO_LVGL/DEMO_LVGL.ino",
+        "url": "https://raw.githubusercontent.com/NorthernMan54/JC3248W535EN/56161e8269dbb2c32296dcc6e44d4a00f1a2b97e/JC3248W535EN/1-Demo/Demo_Arduino/DEMO_LVGL/DEMO_LVGL.ino",
+        "git_blob_sha1": "f329e08c7e2e1abce53c023237a5eedc10780538",
+        "sha256": "e391b0b99da779ca8a6a3e4162b941976abe9973ec084c9124a9c9b82ffbf8cd"
+      },
+      {
+        "source_path": "JC3248W535EN/5-IO pin distribution/JC3248W535-1.png",
+        "url": "https://raw.githubusercontent.com/NorthernMan54/JC3248W535EN/56161e8269dbb2c32296dcc6e44d4a00f1a2b97e/JC3248W535EN/5-IO%20pin%20distribution/JC3248W535-1.png",
+        "git_blob_sha1": "f99101683f0a42a23fd77f2bb62b661c534c8a29",
+        "sha256": "bc241f369644ff48efdf2954693a0bee7a7d26f2105dec15a5a663f2d6389864"
+      },
+      {
+        "source_path": "JC3248W535EN/5-IO pin distribution/JC3248W535-2.png",
+        "url": "https://raw.githubusercontent.com/NorthernMan54/JC3248W535EN/56161e8269dbb2c32296dcc6e44d4a00f1a2b97e/JC3248W535EN/5-IO%20pin%20distribution/JC3248W535-2.png",
+        "git_blob_sha1": "a3ff1e34e7d4207645d0aa19984a6360efa6a4bb",
+        "sha256": "42b745ca7f785b3bf96a161672f81837cf4953c9cddd916d454de2070001cbf5"
+      },
+      {
+        "source_path": "JC3248W535EN/2-Specification/JC3248W535 Specifications-EN.pdf",
+        "url": "https://raw.githubusercontent.com/NorthernMan54/JC3248W535EN/56161e8269dbb2c32296dcc6e44d4a00f1a2b97e/JC3248W535EN/2-Specification/JC3248W535%20Specifications-EN.pdf",
+        "git_blob_sha1": "d25dedb016600bd8e0adf6299badeef1f82b1216",
+        "sha256": "1ecdda58c9baf8eaed6ef009c7fe0bdf02e60c7e9897f84085b49cf015544c3a"
+      }
+    ],
+    "purchase_reference_url": "https://www.aliexpress.us/item/3256807380017698.html",
+    "purchase_reference_provenance": "User-supplied purchase reference. Available page fetch redirected to AliExpress login; listing contents/specifications were not independently verified.",
+    "purchase_listing_independently_verified": false
+  },
+  "updated_date": "2026-11-10",
+  "public_identity_redaction": {
+    "note": "Unique USB serial/MAC/port and test Twitch account/channel identifiers are omitted from this public record. Measurements, generic USB IDs, hardware mappings and qualification limits are unchanged.",
+    "private_original_record": ".local/publication-prep-originals/hardware/board.json"
+  },
+  "release_status": "development/pre-release",
+  "remaining_release_qualification": {
+    "performance_30fps_target_met": false,
+    "moderation_enabled": false,
+    "extended_active_soak_qualified": false,
+    "battery_power_thermal_qualified": false
+  }
+}

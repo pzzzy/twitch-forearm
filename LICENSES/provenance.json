@@ -1,0 +1,115 @@
+{
+  "scope": "License-text provenance; not a complete firmware SBOM. Binary-release gate is documented in THIRD_PARTY_NOTICES.md.",
+  "files": [
+    {
+      "file": "LICENSES/Apache-2.0.txt",
+      "source": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "file": "LICENSES/NotoEmoji-OFL-1.1.txt",
+      "source": "Google Fonts pinned source; see firmware/components/forearm_fonts/assets/provenance.json",
+      "sha256": "500bb1ccf43df7bbb522112f9133a52b16e1c35e809632f5d8609b179152de5b"
+    },
+    {
+      "file": "LICENSES/Montserrat-2024-OFL-1.1.txt",
+      "source": "Google Fonts pinned source; see firmware/components/forearm_fonts/assets/extended-text-provenance.json",
+      "sha256": "8b7141c03fa4f8d44e6345d5d4931709290f0f67875e452e95ac1fd3a027802e"
+    },
+    {
+      "file": "LICENSES/NotoSans-OFL-1.1.txt",
+      "source": "Google Fonts pinned source; see firmware/components/forearm_fonts/assets/extended-text-provenance.json",
+      "sha256": "cee9892f9f0cc8fe882c9e9537ee6a89621d86ee7ceaf70b02e2b2b1c25c061a"
+    },
+    {
+      "file": "LICENSES/CC0-1.0.txt",
+      "source": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/text/CC0-1.0.txt",
+      "sha256": "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499"
+    },
+    {
+      "file": "LICENSES/Panel-mirror-MIT.txt",
+      "source": "https://raw.githubusercontent.com/NorthernMan54/JC3248W535EN/56161e8269dbb2c32296dcc6e44d4a00f1a2b97e/LICENSE",
+      "sha256": "fb461ef49a26ba0616a37627f7b5b0788c54cbbb71a5bb7d6ce2ef25d6f619df"
+    },
+    {
+      "file": "LICENSES/FontAwesome-5.9.0-license.txt",
+      "source": "https://raw.githubusercontent.com/FortAwesome/Font-Awesome/5.9.0/LICENSE.txt",
+      "sha256": "e779748dfe75e84f974df3c7bc07f842011a100159158b0f1f49b2f2a5a515cb"
+    },
+    {
+      "file": "LICENSES/Montserrat-7.200-OFL-1.1.txt",
+      "source": "Copyright/license from LVGL 8.4.0 scripts/built_in_font/Montserrat-Medium.ttf name table; full SIL OFL 1.1 text",
+      "sha256": "aa47a9d33a0ed60dbc443e33c3506a511fde7191a8351ad1685258f8e879bd27"
+    },
+    {
+      "file": "LICENSES/FontAwesome-5.9.0-OFL-1.1.txt",
+      "source": "Copyright from LVGL 8.4.0 FontAwesome5-Solid+Brands+Regular.woff name table; license selection from Font Awesome 5.9.0/LICENSE.txt; full SIL OFL 1.1 text",
+      "sha256": "6524842eee486cfed3d454b11a798933a59ab1bf04c01c85feaac12134313746"
+    },
+    {
+      "file": "LICENSES/LVGL-8.4.0-MIT.txt",
+      "source": "lvgl/lvgl 8.4.0 LICENCE.txt; pinned in firmware/dependencies.lock",
+      "sha256": "6a916130a36e83a79bb0dca6c6a7bfe60a67af7d118605e2b7b23bd5ad5c4eb0"
+    },
+    {
+      "file": "LICENSES/LodePNG-20201017.txt",
+      "source": "LVGL 8.4.0 src/extra/libs/png/lodepng.h opening license block",
+      "sha256": "d830a55470d61f5ad40bf5effa6211aaacf428d73ff9f3496c69e65f3666acf4"
+    },
+    {
+      "file": "LICENSES/Nayuki-QR-MIT.txt",
+      "source": "LVGL 8.4.0 src/extra/libs/qrcode/qrcodegen.h opening license block",
+      "sha256": "37467bc81e53c5ba34d923b3b08514e74fed3edb2cd340b22fa1d20bd0ce2095"
+    },
+    {
+      "file": "LICENSES/esp-idf-5.3.5/FreeRTOS-MIT.txt",
+      "source": "ESP-IDF v5.3.5/components/freertos/FreeRTOS-Kernel/LICENSE.md",
+      "sha256": "508a77d2e7b51d98adeed32648ad124b7b30241a8e70b2e72c99f92d8e5874d1"
+    },
+    {
+      "file": "LICENSES/esp-idf-5.3.5/lwIP-BSD.txt",
+      "source": "ESP-IDF v5.3.5/components/lwip/lwip/COPYING",
+      "sha256": "8fb15ebdb19eb669e1d37fcd8e57a44c477fcc0e93a9ab0d181760965f94d5ed"
+    },
+    {
+      "file": "LICENSES/esp-idf-5.3.5/Newlib-COPYING.txt",
+      "source": "ESP-IDF v5.3.5/components/newlib/COPYING.NEWLIB",
+      "sha256": "0681089a556e93791da82718d68011ba452de245f7f59c3846936304756ac0c0"
+    },
+    {
+      "file": "LICENSES/esp-idf-5.3.5/cJSON-MIT.txt",
+      "source": "ESP-IDF v5.3.5/components/json/cJSON/LICENSE",
+      "sha256": "a36dda207c36db5818729c54e7ad4e8b0c6fba847491ba64f372c1a2037b6d5c"
+    },
+    {
+      "file": "LICENSES/esp-idf-5.3.5/HTTP-parser-MIT.txt",
+      "source": "ESP-IDF v5.3.5/components/http_parser/LICENSE.txt",
+      "sha256": "3aced2d086d3f59cafb6589770c30c1e45a5bdf50c1d4375060b81a615db604c"
+    },
+    {
+      "file": "LICENSES/esp-idf-5.3.5/wpa_supplicant-COPYING.txt",
+      "source": "ESP-IDF v5.3.5/components/wpa_supplicant/COPYING",
+      "sha256": "a87ac4e333d0f120408a9d814e40c3672cd27f365af89b4f2f6631f7a9338953"
+    },
+    {
+      "file": "LICENSES/esp-idf-5.3.5/wpa_supplicant-BSD.txt",
+      "source": "ESP-IDF v5.3.5/components/wpa_supplicant/README",
+      "sha256": "17ccbcf4b17a910795292fb4a95f4742d2ecda37d06fcf20d60ffbd70cfbc609"
+    },
+    {
+      "file": "LICENSES/esp-idf-5.3.5/MbedTLS-dual-license.txt",
+      "source": "ESP-IDF v5.3.5/components/mbedtls/mbedtls/LICENSE",
+      "sha256": "9b405ef4c89342f5eae1dd828882f931747f71001cfba7d114801039b52ad09b"
+    },
+    {
+      "file": "LICENSES/esp-idf-5.3.5/WiFi-Apache-2.0.txt",
+      "source": "ESP-IDF v5.3.5/components/esp_wifi/lib/LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "file": "LICENSES/esp-idf-5.3.5/PHY-Apache-2.0.txt",
+      "source": "ESP-IDF v5.3.5/components/esp_phy/lib/LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    }
+  ]
+}

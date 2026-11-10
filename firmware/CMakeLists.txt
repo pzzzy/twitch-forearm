@@ -1,0 +1,16 @@
+cmake_minimum_required(VERSION 3.16)
+execute_process(COMMAND git -C ${CMAKE_CURRENT_LIST_DIR}/.. rev-parse HEAD
+    OUTPUT_VARIABLE FOREARM_SOURCE_COMMIT OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+if(NOT FOREARM_SOURCE_COMMIT MATCHES "^[0-9a-f]+$")
+    set(FOREARM_SOURCE_COMMIT "uncommitted")
+endif()
+execute_process(COMMAND git -C ${CMAKE_CURRENT_LIST_DIR}/.. status --porcelain
+    OUTPUT_VARIABLE FOREARM_SOURCE_CHANGES OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+if(FOREARM_SOURCE_CHANGES)
+    string(APPEND FOREARM_SOURCE_COMMIT "-dirty")
+endif()
+add_compile_definitions(FOREARM_SOURCE_COMMIT="${FOREARM_SOURCE_COMMIT}")
+add_compile_definitions(LV_KCONFIG_IGNORE=1 LV_CONF_PATH=${CMAKE_CURRENT_LIST_DIR}/main/lv_conf.h)
+include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+set(PROJECT_VER "0.4.0-beta.1")
+project(forearm_chat)

@@ -1,0 +1,66 @@
+{
+  "source": "Google Fonts / Montserrat and Noto Sans (Greek subset)",
+  "commit": "8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5",
+  "files": [
+    {
+      "file": "assets/Montserrat-METADATA.pb",
+      "url": "https://raw.githubusercontent.com/google/fonts/8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5/ofl/montserrat/METADATA.pb",
+      "git_blob_sha1": "26ff69860a1f09f65fc2b8b542238b9dd3c8da08",
+      "sha256": "c48dbcaee013b8f6a33e7e6a79191adbf098a36839367d9750598594ff664e5f",
+      "bytes": 6727
+    },
+    {
+      "file": "assets/Montserrat[wght].ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5/ofl/montserrat/Montserrat%5Bwght%5D.ttf",
+      "git_blob_sha1": "c97aca18592834d8706549c279cb8d5ac5d85f69",
+      "sha256": "0f7b311b2f3279e4eef9b2f968bcdbab6e28f4daeb1f049f4f278a902bcd82f7",
+      "bytes": 744936
+    },
+    {
+      "file": "assets/Montserrat-OFL.txt",
+      "url": "https://raw.githubusercontent.com/google/fonts/8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5/ofl/montserrat/OFL.txt",
+      "git_blob_sha1": "fe576a2ee1f96353b05d030c0b7620d525cc53a8",
+      "sha256": "8b7141c03fa4f8d44e6345d5d4931709290f0f67875e452e95ac1fd3a027802e",
+      "bytes": 4400
+    },
+    {
+      "file": "assets/NotoSans[wdth,wght].ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5/ofl/notosans/NotoSans%5Bwdth%2Cwght%5D.ttf",
+      "git_blob_sha1": "75575046c015ff623a848096a15779867ba71453",
+      "sha256": "bfb7bb691513f12e734dc346c03a03f784912432d7e3fa8e56efcf906fe86b3d",
+      "bytes": 2049096
+    },
+    {
+      "file": "assets/NotoSans-OFL.txt",
+      "url": "https://raw.githubusercontent.com/google/fonts/8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5/ofl/notosans/OFL.txt",
+      "git_blob_sha1": "6843f31878c9945e1e71e1baa275546b4eefead8",
+      "sha256": "cee9892f9f0cc8fe882c9e9537ee6a89621d86ee7ceaf70b02e2b2b1c25c061a",
+      "bytes": 4396
+    }
+  ],
+  "conversion": {
+    "instancer": "FontTools 4.60.1",
+    "montserrat_axis": {
+      "wght": 400
+    },
+    "noto_sans_axes": {
+      "wght": 400,
+      "wdth": 100
+    },
+    "montserrat_note": "Source default wght=100 is explicitly instantiated to400 so extended text matches regular-weight body.",
+    "converter": "lv_font_conv1.5.3, npm package-lock.json",
+    "size_px": 24,
+    "bpp": 4,
+    "compression": false,
+    "kerning": true,
+    "runtime_line_height": 27,
+    "runtime_base_line": 5,
+    "ranges": "Montserrat:00A0-024F,0400-052F,2000-206F,20A0-20CF,2190-21FF; NotoSans:0370-03FF",
+    "output_file": "forearm_text_24.c",
+    "output_sha256": "3104c83bfda2e0ca2bf9842d7f7908be7f7f16a0235b5d5e6444d3345447d080",
+    "glyph_codepoints": 819,
+    "host_compiled_bytes": 115404,
+    "converter_output_sha256": "6b4a2eea50964e1fef08837389977a6239a20b3b2cd3f1ad011f15edf6fe10e0",
+    "license_header": "tools/text-license-header.txt"
+  }
+}

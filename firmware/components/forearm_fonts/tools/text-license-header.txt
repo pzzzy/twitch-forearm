@@ -1,0 +1,13 @@
+/*
+ * SPDX-FileCopyrightText: 2024 The Montserrat.Git Project Authors (https://github.com/JulietaUla/Montserrat.git)
+ * SPDX-FileCopyrightText: 2022 The Noto Project Authors (https://github.com/notofonts/latin-greek-cyrillic)
+ * SPDX-License-Identifier: OFL-1.1
+ *
+ * Modified font: Forearm Text 24 (regular-weight, 24 px bitmap subsets).
+ * Derived from Montserrat[wght].ttf and NotoSans[wdth,wght].ttf in Google Fonts
+ * commit 8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5 using FontTools 4.60.1 and
+ * lv_font_conv 1.5.3. This generated font data remains under SIL OFL 1.1.
+ * Full copyrights/licenses: assets/Montserrat-OFL.txt and assets/NotoSans-OFL.txt.
+ * Source and conversion details: assets/extended-text-provenance.json.
+ */
+

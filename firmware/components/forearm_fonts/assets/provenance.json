@@ -1,0 +1,58 @@
+{
+  "source": "Google Fonts / Noto Emoji",
+  "commit": "8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5",
+  "files": [
+    {
+      "file": "assets/NotoEmoji[wght].ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5/ofl/notoemoji/NotoEmoji%5Bwght%5D.ttf",
+      "sha256": "de6c18832938afc99caf132b39d6a30a19bac7f2e812e28db2535b4608d27551",
+      "bytes": 1982596
+    },
+    {
+      "file": "assets/OFL.txt",
+      "url": "https://raw.githubusercontent.com/google/fonts/8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5/ofl/notoemoji/OFL.txt",
+      "sha256": "500bb1ccf43df7bbb522112f9133a52b16e1c35e809632f5d8609b179152de5b",
+      "bytes": 4330
+    },
+    {
+      "file": "assets/METADATA.pb",
+      "url": "https://raw.githubusercontent.com/google/fonts/8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5/ofl/notoemoji/METADATA.pb",
+      "sha256": "88d5f22b863f40f1e0f14484e018cd93c5e0d899e80523d84351483b2bd3d993",
+      "bytes": 12386
+    },
+    {
+      "file": "assets/upstream_info.md",
+      "url": "https://raw.githubusercontent.com/google/fonts/8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5/ofl/notoemoji/upstream_info.md",
+      "sha256": "3c6c0c46107587fbbd052f554e68c730e45e10b186af03f98fcec361c6e904dd",
+      "bytes": 838
+    }
+  ],
+  "conversion": {
+    "tool": "lv_font_conv",
+    "version": "1.5.3",
+    "npm_integrity": "sha512-0xJQThBOw2iptFccSXrKDIUTQAwr/2zhKjCI1lATIRgZo8uvYRTmenKafW9yTw6G0y5AyW00tqGpUtYuTuBIbQ==",
+    "size_px": 24,
+    "bpp": 4,
+    "compression": false,
+    "glyph_codepoints": 1380,
+    "output_sha256": "9669cbcdee4680bab19562f391fa3134d200acefef0913f847cc6677e835d2d6",
+    "common_emoji_missing_codepoints": {
+      "\ud83d\ude00": [],
+      "\ud83d\ude02": [],
+      "\ud83d\ude2d": [],
+      "\ud83d\udd25": [],
+      "\ud83d\udc9c": [],
+      "\ud83d\udc4d": [],
+      "\u2728": [],
+      "\ud83c\udf0d": [],
+      "\ud83c\udf89": [],
+      "\ud83e\udd14": [],
+      "\ud83e\udd79": [],
+      "\u2764\ufe0f": [],
+      "\ud83d\ude80": [],
+      "\ud83e\udd84": []
+    },
+    "converter_output_sha256": "9b65c4da95e19addb28c9f25bd20b31f7e11a4a834c9737dce6cf91055f6a562",
+    "license_header": "tools/emoji-license-header.txt"
+  }
+}

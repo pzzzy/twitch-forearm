@@ -1,0 +1,26 @@
+Forearm Chat
+Copyright 2026 Forearm Chat contributors
+
+Original project code is licensed under the Apache License, Version 2.0.
+The root LICENSE does not replace third-party code or font licenses.
+
+This project includes a modified Espressif AXS15231B panel driver under
+Apache-2.0 and a CC0-1.0 board initialization sequence. Their original copyright
+notices are retained. Pinned vendor-demo source and changes are documented in
+firmware/components/forearm_panel/README.md.
+
+The font data includes modified Noto Emoji, Montserrat and Noto Sans under the
+SIL Open Font License 1.1. LVGL's built-in fonts also contain Montserrat and
+Font Awesome glyphs under that license. Font data is not relicensed under the
+project's Apache-2.0 license.
+
+LVGL, Project Nayuki QR Code generator, LodePNG and ESP-IDF components retain
+their respective licenses and attributions. See THIRD_PARTY_NOTICES.md and
+LICENSES/ for precise scope, source provenance, full license texts, and the
+exact-input audit required for each firmware binary release.
+The Mozilla CA-store source is supplied under MPL-2.0 in
+LICENSES/esp-idf-5.3.6/ca-source/. GCC runtime code retains its Runtime Library
+Exception and LLVM headers retain their LLVM exception.
+
+Twitch, its emotes, and user chat content are not licensed by this project.
+This project is independent and is not endorsed by Twitch or the board vendor.

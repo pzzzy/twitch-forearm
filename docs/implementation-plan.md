@@ -1,0 +1,30 @@
+# Implementation sequence
+
+Updated November 10, 2026. Native firmware v0.3.2 is a development/pre-release tested standalone over Wi-Fi. Reference-account setup, persisted authorization and live reception have worked. Every new owner supplies their own Wi-Fi and Public Twitch application settings. This sequence distinguishes implemented functionality from remaining performance/soak/power qualification and beta moderation qualification; exact evidence is in [verification](verification.md).
+
+1. **Recoverable hardware baseline — delivered.** Full factory flash is independently verified and preserved; chip identity, original partitions and vendor provenance are recorded. Native touch uses the operational SDA4/SCL8 mapping. The SD card remains unmodified. Exact PCB revision and complete physical calibration remain separate.
+2. **Pixels and touch — running, qualification continues.** Native AXS15231B full-frame QSPI output, portrait rendering and physical sampling operate. The user confirmed long-message Back after the release/idle parser fix. Finish all-corner and repeated-gesture checks, final frame/input timing and longer stress. Native landscape is not implemented.
+3. **Native chat UI — delivered initial version.** Full-panel portrait chat uses the portable core, virtualized rows, floating settings/pause circles and an explicit Go live pill, with no persistent header. Device replay covers pause/unread, injected scrolling, long Unicode and static emotes. Physical readability on a final forearm mount remains to be established.
+4. **Wi-Fi and login — working.** Local Node-backed USB setup, synchronized-time TLS, Public Device Code OAuth, persisted credentials and token lifecycle run on device. The Public Client ID and the authorized test channel are supplied and authorized. Normal operation has no desktop bridge. Extended refresh/revocation and radio-failure testing remain qualification work.
+5. **Live reading — working.** EventSub receives actual messages, with deduplication, deletion/clear handling, bounded queues and gap indication. Real Kappa CDN download/decode/render has passed. Do not claim server-history replay or final busy-channel performance from that initial session.
+6. **Moderation — implemented for the hardware-beta candidate; device qualification pending.** Enable Helix calls only after broadcaster/moderator identity and granted scopes are validated. Keep read-only behavior when permissions are insufficient. Bind each action to the immutable selected target, confirm deliberately, show pending/success/error/unknown outcome, and never queue destructive actions offline. First exercise against synthetic transport fixtures; perform live validation only with an explicitly chosen test account/message.
+7. **Wearable qualification.** Measure display readability outdoors and on camera, hotspot recovery, battery draw, temperature against skin, charging behavior and runtime. Confirm connector polarity, charger rating and cell protection against the actual board revision. Design a ventilated mount with strain relief and no exposed board or battery touching skin. No runtime estimate is justified until current is measured.
+
+## Acceptance gates
+
+These remain acceptance requirements unless a version-specific measurement or test is recorded. The v0.3.0 injected-scroll baseline was 15.503 fps. Controlled v0.3.2 scrolling with real chat/TLS measured about 15.34 fps with row-sprite caching off versus 15.39 fps on; that revision's cache default was off. The beta enables row sprites and backdrop culling; its performance, physical-input and active-soak gates require their own revision-specific evidence in [verification](verification.md).
+
+- Sustained scrolling at least 30 displayed frames/s with frame-time p95 at or below 33 ms in the chosen display mode; finger-to-feedback p95 at or below 100 ms under TLS and burst chat. Measure on the physical panel, including transfer time.
+- Paused viewport and selected target stay fixed during new arrivals, deletion events, layout changes and bounded history eviction. Any loss of retained history gets a visible marker. Return to live always requires an explicit action.
+- A drag cannot activate moderation. A chat tap opens a sheet; a separate deliberate confirmation is required for an action. No hidden tap gesture directly bans.
+- Core tests cover duplicates, bounded UTF-8 text, cross-channel identity, selection stability, pause/unread transitions, deletion/clear and eviction. Device replay includes 20 messages/s sustained for ten minutes and a 100 messages/s burst for five seconds while scrolling, with explicit overload accounting if the incoming queue fills.
+- One-hour active soak plus repeated Wi-Fi loss/recovery: no watchdog resets, allocation drift, corrupt rows or silently replayed moderation requests. Record minimum free internal heap and largest DMA block, not just total PSRAM.
+- A moderately busy channel remains readable at the chosen physical text size. A busy channel may outrun human reading; expose pause and unread count instead of shrinking the text or claiming all messages can be read.
+
+## Decisions already made
+
+Native firmware, standalone networking, EventSub chat plus Helix account/channel resolution, phone/browser device login, bounded local scrollback, explicit pause/live state and identity-safe selection are implemented. The current portrait layout follows the requested floating circles and Go live pill, with no permanent header. Live authorization/read-only reception have run. The 0.4.0-beta.1 candidate now implements permission-gated moderation with separate confirmation and successful-action Undo. Host tests pass; final real-action and physical confirmation evidence is pending. Earlier v0.3.2 results remain historical.
+
+## Inputs and hardware work still needed
+
+The Public Client ID, the authorized test account/channel and local Wi-Fi setup are already supplied. Remaining wearable inputs include preferred arm/mounting position, battery/strap dimensions and measured power/runtime requirements. Alternate orientation, final enclosure and battery qualification are future work, not login blockers.
