@@ -3,10 +3,12 @@ set -eu
 cd "$(dirname "$0")"
 
 # npm ci --ignore-scripts is required only when regenerating the committed C.
+for font_size in 16 20 24; do
 ./node_modules/.bin/lv_font_conv \
   --font '../assets/NotoEmoji[wght].ttf' \
   --range '0x2600-0x27FF,0x1F1E6-0x1F1FF,0x1F300-0x1FAFF,0x00A9,0x00AE,0x203C,0x2049,0x2122,0x2139,0x2194-0x2199,0x21A9-0x21AA,0x231A-0x231B,0x2328,0x23CF-0x23FA,0x24C2,0x25AA-0x25AB,0x25B6,0x25C0,0x25FB-0x25FE,0x2934-0x2935,0x2B05-0x2B07,0x2B1B-0x2B1C,0x2B50,0x2B55,0x3030,0x303D,0x3297,0x3299' \
-  --size 24 --bpp 4 --no-compress --no-kerning \
-  --format lvgl --lv-include lvgl.h --lv-font-name forearm_emoji_24 \
-  --output ../forearm_emoji_24.c
-python3 prepend-font-license.py emoji ../forearm_emoji_24.c
+  --size "$font_size" --bpp 4 --no-compress --no-kerning \
+  --format lvgl --lv-include lvgl.h --lv-font-name "forearm_emoji_$font_size" \
+  --output "../forearm_emoji_$font_size.c"
+python3 prepend-font-license.py emoji "../forearm_emoji_$font_size.c"
+done

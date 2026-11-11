@@ -4,6 +4,7 @@
 #include "twitch_client.h"
 #include "forearm/device_config.h"
 #include "forearm/emote_fragments.h"
+#include "emote_cache.h"
 
 #include <algorithm>
 #include <atomic>
@@ -190,6 +191,7 @@ void startup_failure(const char* stage, esp_err_t error) {
 void set_auth_state(bool value) {
     portENTER_CRITICAL(&state_mux);
     visible_state.authenticated = value;
+    if (!value) visible_state.broadcaster_id[0] = 0;
     portEXIT_CRITICAL(&state_mux);
 }
 void invalidate_moderation(const char* reason) {
@@ -651,8 +653,10 @@ Validation validate_account(bool may_refresh = true) {
     visible_state.authenticated = true;
     copy_exact(visible_state.login, login);
     copy_exact(visible_state.channel, target);
+    copy_exact(visible_state.broadcaster_id, broadcaster_id);
     portEXIT_CRITICAL(&state_mux);
     TwitchEvent event;
+    emote_cache_set_channel(broadcaster_id);
     event.kind = TwitchEventKind::Authenticated;
     copy_exact(event.user_id, account_id); copy_exact(event.channel_id, broadcaster_id);
     copy_exact(event.display_name, login); copy_text(event.text, target); event.connected = true;
@@ -926,6 +930,7 @@ void process_frame(RawFrame& frame) {
             }
             if (!cJSON_IsArray(fragments) || !fragment_cursor.complete())
                 for (unsigned i = 0; i < event.emote_count; ++i) event.emotes[i].position_valid = false;
+            event.emote_count = emote_cache_collect(event.channel_id, event.text, event.emotes, event.emote_count);
             const auto* badges = cJSON_GetObjectItemCaseSensitive(notification, "badges");
             const cJSON* badge = nullptr;
             cJSON_ArrayForEach(badge, badges) {
@@ -981,6 +986,7 @@ void configure(const Configuration& value) {
     copy_exact(visible_state.channel, configuration.channel);
     visible_state.login[0] = 0;
     visible_state.authenticated = false;
+    visible_state.broadcaster_id[0] = 0;
     portEXIT_CRITICAL(&state_mux);
     if (wifi_setup()) state_message("Connecting to Wi-Fi");
     else state_message("Wi-Fi initialization failed");
@@ -1004,6 +1010,7 @@ void watch_channel(const Configuration& target) {
     portENTER_CRITICAL(&state_mux);
     visible_state.read_only = configuration.read_only != 0;
     copy_exact(visible_state.channel, configuration.channel);
+    visible_state.broadcaster_id[0] = 0;
     portEXIT_CRITICAL(&state_mux);
 }
 
@@ -1201,6 +1208,7 @@ bool twitch_set_config(const char* ssid, const char* password, const char* clien
         !copy_exact(command.config.client_id, client_id) || !copy_exact(command.config.channel, channel)) return false;
     for (auto& c : command.config.channel) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     invalidate_moderation("Device configuration is changing");
+    portENTER_CRITICAL(&state_mux); visible_state.broadcaster_id[0] = 0; portEXIT_CRITICAL(&state_mux);
     force_validation.store(true);
     return xQueueSend(commands, &command, 0) == pdTRUE;
 }
@@ -1217,6 +1225,7 @@ bool twitch_watch_channel(const char* channel, bool read_only) {
         portENTER_CRITICAL(&state_mux); visible_state.read_only = true; portEXIT_CRITICAL(&state_mux);
     }
     invalidate_moderation("Channel profile is changing");
+    portENTER_CRITICAL(&state_mux); visible_state.broadcaster_id[0] = 0; portEXIT_CRITICAL(&state_mux);
     force_validation.store(true);
     return xQueueSend(commands, &command, 0) == pdTRUE;
 }

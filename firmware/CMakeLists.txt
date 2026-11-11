@@ -12,7 +12,7 @@ endif()
 add_compile_definitions(FOREARM_SOURCE_COMMIT="${FOREARM_SOURCE_COMMIT}")
 add_compile_definitions(LV_KCONFIG_IGNORE=1 LV_CONF_PATH=${CMAKE_CURRENT_LIST_DIR}/main/lv_conf.h)
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-set(PROJECT_VER "0.4.0-beta.1")
+set(PROJECT_VER "0.5.0-dev")
 project(forearm_chat)
 
 # IDF maps its project directory (firmware), SDK and build roots for reproducible

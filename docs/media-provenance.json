@@ -1,0 +1,18 @@
+{
+  "twemoji": {
+    "version": "17.0.2",
+    "commit": "388f518b756404152f128a3539f5e7f9a6f1ebd6",
+    "source": "https://github.com/jdecked/twemoji",
+    "license": "CC-BY-4.0",
+    "license_file": "LICENSES/Twemoji-17.0.2-CC-BY-4.0.txt",
+    "license_sha256": "8ae9438818c26e4873b91d8c6ad620526c011e27e125677f13031eda903f007c",
+    "png_key_count": 4009,
+    "use": "Filename metadata only compiled into firmware. PNG artwork downloaded at runtime, resized and converted to RGB565+alpha. No upstream JS copied.",
+    "sorted_filenames_sha256": "3b067a7cc0c6a309d31d7bb9175c9d7fd994fa9022cce9c7ac6f0615c6b1388e"
+  },
+  "seventv": {
+    "api": "https://7tv.io/v3/",
+    "cdn": "https://cdn.7tv.app/",
+    "use": "Global and configured Twitch-channel metadata and static runtime PNGs. No artwork redistributed."
+  }
+}

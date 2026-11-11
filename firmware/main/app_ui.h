@@ -23,6 +23,7 @@ struct AppUiStats {
     bool fixture_mode;
     bool authenticated;
     bool read_only;
+    unsigned ui_scale_percent;
     bool login_visible;
     bool selection_visible;
     std::uint32_t unread;
@@ -146,6 +147,14 @@ void app_ui_set_moderation_login_callback(void (*callback)());
 // The fallback must remain alive for the lifetime of the app (e.g. a compiled
 // monochrome emoji font). Heights and labels use the same composed font.
 void app_ui_set_font_fallback(const _lv_font_t *fallback);
+// Snaps to67/75/80/90/100/115/125/133/150 percent. May be called before initialization;
+// programmatic changes do not invoke the persistence callback.
+void app_ui_set_ui_scale(unsigned percent);
+unsigned app_ui_ui_scale();
+// Invoked once after a user finishes a settings-slider contact, on the UI task.
+void app_ui_set_scale_change_handler(void (*handler)(unsigned percent));
+// Settings requests the startup preview after consuming its old touch contact.
+void app_ui_set_startup_preview_callback(void (*callback)());
 void app_ui_reset_perf();
 // Default ON after hardware A/B validation. Safe on the UI owner only.
 void app_ui_set_sprite_cache(bool enabled);

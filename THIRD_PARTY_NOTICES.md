@@ -13,15 +13,15 @@ SHA-256 hashes are in [LICENSES/provenance.json](LICENSES/provenance.json).
 | --- | --- | --- |
 | `firmware/components/forearm_panel/esp_lcd_axs15231b.c` and `include/esp_lcd_axs15231b.h` | Espressif Systems (Shanghai) CO LTD, 2021–2024 / 2022–2024. Vendor-demo mirror `NorthernMan54/JC3248W535EN` at `56161e8269dbb2c32296dcc6e44d4a00f1a2b97e`, directory `JC3248W535EN/1-Demo/Demo_Arduino/DEMO_LVGL`. Touch implementation removed, display-on semantics and error propagation corrected. Original headers and local modification notices are retained. | [Apache-2.0](LICENSES/Apache-2.0.txt). The mirror's [MIT notice](LICENSES/Panel-mirror-MIT.txt) is also preserved for any mirror-level contribution; it does not replace explicit vendor-file licenses. |
 | `firmware/components/forearm_panel/jc3248_init.c` | Espressif Systems (Shanghai) CO LTD, 2021–2024. Initialization table extracted from that snapshot's `esp_bsp.c`, with a local native-component wrapper. | [CC0-1.0](LICENSES/CC0-1.0.txt), as identified in the source header. |
-| `firmware/components/forearm_fonts/assets/NotoEmoji[wght].ttf` and generated `forearm_emoji_24.c` | Copyright 2013 Google LLC. Original font plus a modified 24 px monochrome bitmap subset. | [SIL OFL 1.1, Noto Emoji](LICENSES/NotoEmoji-OFL-1.1.txt). |
-| `firmware/components/forearm_fonts/assets/Montserrat[wght].ttf` and the Montserrat part of generated `forearm_text_24.c` | Copyright 2024 The Montserrat.Git Project Authors. Original font plus a weight-400 instance and modified 24 px bitmap subset. | [SIL OFL 1.1, Montserrat](LICENSES/Montserrat-2024-OFL-1.1.txt). |
-| `firmware/components/forearm_fonts/assets/NotoSans[wdth,wght].ttf` and the Greek part of generated `forearm_text_24.c` | Copyright 2022 The Noto Project Authors. Original font plus a weight-400, width-100 instance and modified Greek bitmap subset. | [SIL OFL 1.1, Noto Sans](LICENSES/NotoSans-OFL-1.1.txt). |
+| `firmware/components/forearm_fonts/assets/NotoEmoji[wght].ttf` and generated `forearm_emoji_*.c` | Copyright 2013 Google LLC. Original font plus modified 16/20/24 px monochrome bitmap subsets. | [SIL OFL 1.1, Noto Emoji](LICENSES/NotoEmoji-OFL-1.1.txt). |
+| `firmware/components/forearm_fonts/assets/Montserrat[wght].ttf` and the Montserrat part of generated `forearm_text_*.c` | Copyright 2024 The Montserrat.Git Project Authors. Original font plus a weight-400 instance and modified 16/18/20/22/24/28/30/32/36 px bitmap subsets. | [SIL OFL 1.1, Montserrat](LICENSES/Montserrat-2024-OFL-1.1.txt). |
+| `firmware/components/forearm_fonts/assets/NotoSans[wdth,wght].ttf` and the Greek part of generated `forearm_text_*.c` | Copyright 2022 The Noto Project Authors. Original font plus a weight-400, width-100 instance and modified Greek bitmap subsets at the same sizes. | [SIL OFL 1.1, Noto Sans](LICENSES/NotoSans-OFL-1.1.txt). |
 
 Google Fonts inputs are pinned to commit
 `8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5`. Exact URLs, input hashes,
 conversion parameters, and output hashes are in the font component's
 `assets/provenance.json` and `assets/extended-text-provenance.json`. Generated
-font names are `forearm_emoji_24` and `forearm_text_24`. Bitmap font derivatives
+font names are `forearm_emoji_<size>` and `forearm_text_<size>`. Bitmap font derivatives
 remain under OFL-1.1; the surrounding application can use a separate license.
 The unmodified TTF inputs retain their original names and copyright notices.
 
@@ -35,7 +35,7 @@ so their accompanying license bundles must include the applicable notices.
 | Dependency / compiled material | License and attribution |
 | --- | --- |
 | LVGL 8.4.0 | [MIT](LICENSES/LVGL-8.4.0-MIT.txt), Copyright (c) 2021 LVGL Kft. Source: `lvgl/lvgl`, tag `v8.4.0`; registry content hash is in `firmware/dependencies.lock`. |
-| LVGL's enabled `lv_font_montserrat_16/20/24/28.c` | Conversion of `scripts/built_in_font/Montserrat-Medium.ttf`, version 7.200, Copyright 2011 The Montserrat Project Authors; [OFL-1.1](LICENSES/Montserrat-7.200-OFL-1.1.txt). This older font's attribution is separate from the 2024 source above. |
+| LVGL's enabled `lv_font_montserrat_16/18/20/22/24/28/30/32/36.c` | Conversion of `scripts/built_in_font/Montserrat-Medium.ttf`, version 7.200, Copyright 2011 The Montserrat Project Authors; [OFL-1.1](LICENSES/Montserrat-7.200-OFL-1.1.txt). This older font's attribution is separate from the 2024 source above. |
 | Symbols in those LVGL fonts | Conversion of `FontAwesome5-Solid+Brands+Regular.woff`, with embedded version Font Awesome 5.9.0 and copyright “Copyright (c) Font Awesome”; [OFL-1.1](LICENSES/FontAwesome-5.9.0-OFL-1.1.txt). Preserve the [upstream 5.9.0 license notice](LICENSES/FontAwesome-5.9.0-license.txt), from [Font Awesome 5.9.0](https://github.com/FortAwesome/Font-Awesome/tree/5.9.0). These are font-derived glyphs; the package's SVG/JS icons are not included. |
 | LodePNG version 20201017, bundled by LVGL for PNG decoding | [zlib-style license](LICENSES/LodePNG-20201017.txt), Copyright (c) 2005–2020 Lode Vandevenne. Source: LVGL 8.4.0 `src/extra/libs/png/lodepng.c/.h`. |
 | Project Nayuki QR Code generator, bundled by LVGL | [MIT](LICENSES/Nayuki-QR-MIT.txt), Copyright (c) Project Nayuki. Source: LVGL 8.4.0 `src/extra/libs/qrcode/qrcodegen.c/.h`; [upstream project](https://www.nayuki.io/page/qr-code-generator-library). |
@@ -109,6 +109,22 @@ npm transitive dependencies, and FontTools' additional upstream notices. Those
 tools are not included in an ordinary firmware source distribution.
 
 ## Content and hardware references
+
+The development media pipeline downloads **Twemoji 17.0.2** emoji artwork at
+runtime from the [Twemoji project](https://github.com/jdecked/twemoji/tree/388f518b756404152f128a3539f5e7f9a6f1ebd6),
+by Twitter and other contributors, maintained by the Twemoji contributors.
+Upstream attribution identifies Twitter (2014–2021) and Jason Sofonia & Justine
+De Caires (2022–present); see the immutable upstream source linked above.
+The artwork is licensed under [CC BY 4.0](LICENSES/Twemoji-17.0.2-CC-BY-4.0.txt).
+The device resizes the original PNG and converts it to RGB565 with alpha; these
+are display adaptations. The source artwork and PNG files are not bundled into
+firmware or source. Settings carries an attribution, and the pinned filename
+metadata/provenance identifies supported assets. No upstream JavaScript is used.
+
+7TV global and configured-channel emotes are also downloaded at runtime. Their
+availability does not grant permission to redistribute their artwork; the
+project license does not cover emotes or their creators' rights. Animated 7TV
+sources use static poster PNGs. Twitch and 7TV emote artwork is not bundled.
 
 No Twitch emote image, real chat recording, vendor schematic, factory firmware,
 or manufacturer ZIP is distributed as a project asset. Runtime emotes and chat

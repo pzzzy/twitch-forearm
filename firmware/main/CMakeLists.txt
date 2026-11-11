@@ -4,7 +4,7 @@ if(FOREARM_NETWORK)
     set(FOREARM_NETWORK_SOURCE "twitch_client.cpp")
 endif()
 idf_component_register(
-    SRCS "main.cpp" "board_display.cpp" "app_ui.cpp" "emote_cache.cpp" ${FOREARM_NETWORK_SOURCE}
+    SRCS "main.cpp" "board_display.cpp" "app_ui.cpp" "emote_cache.cpp" "startup_animation.cpp" ${FOREARM_NETWORK_SOURCE}
     INCLUDE_DIRS "." "../../core/include"
     REQUIRES esp_psram spi_flash esp_app_format forearm_panel forearm_fonts esp_lcd driver esp_timer
              lvgl__lvgl esp_wifi esp_netif nvs_flash esp_http_client esp-tls

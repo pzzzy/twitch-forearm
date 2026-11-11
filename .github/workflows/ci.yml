@@ -94,6 +94,7 @@ jobs:
           sh firmware/components/forearm_fonts/tools/check-font.sh
           python firmware/components/forearm_panel/tests/run_host.py
           python tools/tests_ui/run_host.py
+          python tools/tests_startup/run_host.py
       - name: Audit exact network firmware license inputs
         id: license_audit
         if: ${{ !cancelled() && matrix.network == 'ON' && steps.build.outcome == 'success' }}

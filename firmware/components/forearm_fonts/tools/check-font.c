@@ -10,6 +10,23 @@ int main(void) {
     assert(emoji->line_height == body->line_height);
     assert(emoji->base_line == body->base_line);
     assert(extended->line_height == 27 && extended->base_line == 5);
+    const unsigned sizes[] = {16,18,20,22,24,28,30,32,36};
+    for (unsigned i = 0; i < sizeof(sizes)/sizeof(sizes[0]); ++i) {
+        const lv_font_t* sized = forearm_body_font_for_size(sizes[i]);
+        lv_font_glyph_dsc_t latin, greek, emoji_glyph, missing, fallback;
+        assert(lv_font_get_glyph_dsc(sized, &latin, 'A', 0));
+        assert(lv_font_get_glyph_dsc(sized, &greek, 0x03bb, 0));
+        assert(lv_font_get_glyph_dsc(sized, &emoji_glyph, 0x1f600, 0));
+        assert(latin.box_h > 0 && greek.box_h > 0 && emoji_glyph.box_h > 0);
+        assert(greek.resolved_font->line_height == sized->line_height);
+        assert(emoji_glyph.resolved_font->line_height == sized->line_height);
+        assert(lv_font_get_glyph_dsc(sized, &fallback, '?', 0));
+        assert(lv_font_get_glyph_dsc(sized, &missing, 0x10ffff, 0));
+        assert(missing.adv_w == fallback.adv_w);
+        assert(lv_font_get_glyph_bitmap(missing.resolved_font, 0x10ffff));
+    }
+    assert(forearm_body_font_for_size(24) == body);
+    assert(forearm_body_font_for_size(19) == body);
     const uint32_t common[] = {0x1f600, 0x1f602, 0x1f62d, 0x1f525, 0x1f49c,
         0x1f44d, 0x2728, 0x1f30d, 0x1f389, 0x1f914, 0x1f979, 0x2764,
         0x1f680, 0x1f984};

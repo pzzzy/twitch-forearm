@@ -5,12 +5,39 @@
 
 LV_FONT_DECLARE(forearm_emoji_24);
 LV_FONT_DECLARE(forearm_text_24);
+LV_FONT_DECLARE(forearm_text_20);
+LV_FONT_DECLARE(forearm_text_16);
+LV_FONT_DECLARE(forearm_text_18);
+LV_FONT_DECLARE(forearm_text_22);
+LV_FONT_DECLARE(forearm_text_28);
+LV_FONT_DECLARE(forearm_text_30);
+LV_FONT_DECLARE(forearm_text_32);
+LV_FONT_DECLARE(forearm_text_36);
+LV_FONT_DECLARE(forearm_emoji_16);
+LV_FONT_DECLARE(forearm_emoji_20);
+
+struct font_family {
+    lv_font_t body, extended, emoji, replacement;
+};
+static struct font_family sized_families[8];
+static const lv_font_t* const sized_base[] = {
+    &lv_font_montserrat_16, &lv_font_montserrat_18,
+    &lv_font_montserrat_20, &lv_font_montserrat_22,
+    &lv_font_montserrat_28, &lv_font_montserrat_30,
+    &lv_font_montserrat_32, &lv_font_montserrat_36
+};
 
 static lv_font_t body_font;
 static lv_font_t emoji_font;
 static lv_font_t extended_font;
 static lv_font_t replacement_font;
 static bool initialized;
+
+static const lv_font_t* replacement_source(const lv_font_t* font) {
+    for (unsigned i = 0; i < 8; ++i)
+        if (font == &sized_families[i].replacement) return sized_base[i];
+    return &lv_font_montserrat_24;
+}
 
 static bool invisible_format_character(uint32_t letter) {
     return letter < 0x20 || letter == 0xf8ff ||
@@ -24,7 +51,6 @@ static bool invisible_format_character(uint32_t letter) {
 static bool replacement_description(const lv_font_t* font,
                                     lv_font_glyph_dsc_t* description,
                                     uint32_t letter, uint32_t next) {
-    (void)font;
     (void)next;
     if (invisible_format_character(letter)) {
         memset(description, 0, sizeof(*description));
@@ -33,14 +59,14 @@ static bool replacement_description(const lv_font_t* font,
     }
     // Deliberately use a recognizable question mark for an unsupported script
     // or emoji. Never silently draw LVGL's missing-glyph outline box.
-    return lv_font_montserrat_24.get_glyph_dsc(
-        &lv_font_montserrat_24, description, '?', 0);
+    const lv_font_t* source = replacement_source(font);
+    return source->get_glyph_dsc(source, description, '?', 0);
 }
 
 static const uint8_t* replacement_bitmap(const lv_font_t* font, uint32_t letter) {
-    (void)font;
     if (invisible_format_character(letter)) return NULL;
-    return lv_font_montserrat_24.get_glyph_bitmap(&lv_font_montserrat_24, '?');
+    const lv_font_t* source = replacement_source(font);
+    return source->get_glyph_bitmap(source, '?');
 }
 
 static void initialize(void) {
@@ -57,7 +83,43 @@ static void initialize(void) {
     extended_font.fallback = &emoji_font;
     body_font = lv_font_montserrat_24;
     body_font.fallback = &extended_font;
+    const lv_font_t* const text[] = {
+        &forearm_text_16, &forearm_text_18, &forearm_text_20, &forearm_text_22,
+        &forearm_text_28, &forearm_text_30, &forearm_text_32, &forearm_text_36
+    };
+    for (unsigned i = 0; i < 8; ++i) {
+        struct font_family* family = &sized_families[i];
+        family->body = *sized_base[i];
+        family->replacement = *sized_base[i];
+        family->replacement.get_glyph_dsc = replacement_description;
+        family->replacement.get_glyph_bitmap = replacement_bitmap;
+        family->replacement.fallback = NULL;
+        family->emoji = i < 2 ? forearm_emoji_16 : i < 4 ? forearm_emoji_20 : forearm_emoji_24;
+        family->emoji.line_height = family->body.line_height;
+        family->emoji.base_line = family->body.base_line;
+        family->emoji.fallback = &family->replacement;
+        family->extended = *text[i];
+        family->extended.line_height = family->body.line_height;
+        family->extended.base_line = family->body.base_line;
+        family->extended.fallback = &family->emoji;
+        family->body.fallback = &family->extended;
+    }
     initialized = true;
+}
+
+const lv_font_t* forearm_body_font_for_size(unsigned pixels) {
+    initialize();
+    switch (pixels) {
+        case 16: return &sized_families[0].body;
+        case 18: return &sized_families[1].body;
+        case 20: return &sized_families[2].body;
+        case 22: return &sized_families[3].body;
+        case 28: return &sized_families[4].body;
+        case 30: return &sized_families[5].body;
+        case 32: return &sized_families[6].body;
+        case 36: return &sized_families[7].body;
+        default: return &body_font;
+    }
 }
 
 const lv_font_t* forearm_body_font(void) {

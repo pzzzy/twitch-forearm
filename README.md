@@ -2,7 +2,9 @@
 
 A native, standalone Twitch chat reader for the Guition JC3248W535 family: ESP32-S3, 3.5-inch 320 × 480 IPS capacitive touch, 16 MB flash and 8 MB PSRAM. It operates directly over Wi-Fi or a phone hotspot. A computer provides development and initial USB setup; normal chat reception runs on the device.
 
-**Hardware beta — 0.4.0-beta.1.** Standalone chat, account login, a saved channel/read-only profile, positioned inline emotes, complete sender-name fallback and guarded moderator controls are implemented. For a particular download, use its [release notes and attached `qualification-summary.json`](https://github.com/pzzzy/twitch-forearm/releases): the tested source commit and image hash must match its manifest. The source documentation preserves historical measurements; they do not automatically qualify another build. Battery, charging, skin temperature and forearm mounting are unqualified. See the [verification history](docs/verification.md) and [release-validation procedure](docs/releasing.md).
+**Development — 0.5.0-dev.** Adds configured-channel/global 7TV emotes, color emoji, a live 16–36 px text-size slider, and a short native startup animation. See [media, sizing and startup behavior](docs/native-runtime.md). The latest qualified download remains **0.4.0-beta.1**; these new features are not in that older binary.
+
+For a particular hardware-beta download, use its [release notes and attached `qualification-summary.json`](https://github.com/pzzzy/twitch-forearm/releases): the tested source commit and image hash must match its manifest. The source documentation preserves historical measurements; they do not automatically qualify another build. Battery, charging, skin temperature and forearm mounting are unqualified. See the [verification history](docs/verification.md) and [release-validation procedure](docs/releasing.md).
 
 ![Native Forearm Chat displaying anonymous synthetic messages](docs/images/chat.png)
 
@@ -19,9 +21,11 @@ This is the owner's purchase reference; the listing redirects automated access t
 - Portrait chat fills the panel, with floating 52 px settings and pause controls. The settings circle has an invisible 72 × 72 px corner touch target; drags do not open it.
 - Dragging pauses live following. Reception continues while paused, with unread counts and an explicit Go live control.
 - PSRAM retains up to 512 messages. Each text field accommodates a full 500-character message, including 500 four-byte Unicode codepoints.
-- Readable 24 px text has extended Latin, Greek, Cyrillic and punctuation fallbacks, plus 1,380 monochrome emoji glyphs. Complex emoji sequences can appear as separate components.
-- Sender names retain up to 100 UTF-8 bytes. Supported Unicode names wrap at 24 px; ASCII names use 20 px. Names needing unavailable glyphs use the sender's separate, exact ASCII login.
-- Loaded static Twitch emotes replace only their verified occurrences inline. Missing positions, unavailable assets and occurrences beyond the eight-per-message limit retain their trigger text. Downloads and decoding run outside the UI task.
+- Settings previews nine text/UI levels live, from 67% to 150% (16–36 px chat text), and saves the selected level on release. Extended Latin, Greek, Cyrillic and punctuation remain available. Buttons retain at least 44 px touch targets.
+- Sender names retain up to 100 UTF-8 bytes. At the default size, supported Unicode names wrap at 24 px and ASCII names use 20 px; both respond to the slider. Names needing unavailable glyphs use the sender's separate, exact ASCII login.
+- Loaded Twitch emotes, configured-channel/global 7TV emotes and supported color emoji replace their exact occurrences inline. Native Twitch metadata takes precedence; 7TV names require word boundaries. Missing assets and occurrences beyond the shared eight-per-message limit retain their original text. Downloads, catalog parsing and decoding run outside the UI task. Animated 7TV sources use a static poster.
+- Color emoji support includes supported joined families, modifiers, flags and keycaps, using pinned Twemoji artwork. Unsupported/unavailable assets retain the compiled monochrome font fallback; arbitrary Unicode shaping is not implemented. [Attribution and provenance](docs/media-provenance.json).
+- A nonblocking violet/teal startup animation replaces automatic demo-chat arrivals. Settings includes Preview startup; synthetic chat remains an explicit diagnostic mode.
 - A saved read-only profile keeps moderation disabled in both the UI and network worker, even when an existing token has broader permissions.
 - Body sprites use at most 32 entries / 2 MiB; a separate author cache uses at most 16 entries / 256 KiB with a 64 KiB per-entry cap. Visible entries stay pinned, and misses or allocation failures use normal drawing. These bounds and opaque-background culling are implementation details, not a frame-rate claim.
 - The board defaults use 32 KiB instruction cache and 32 KiB data cache with 64-byte data-cache lines. History and its lifetime layout array live in PSRAM; visible-row and cache metadata remain in internal memory.
@@ -92,6 +96,7 @@ ctest --test-dir build/core --output-on-failure
 sh firmware/components/forearm_fonts/tools/check-font.sh
 python3 firmware/components/forearm_panel/tests/run_host.py
 python3 tools/tests_ui/run_host.py
+python3 tools/tests_startup/run_host.py
 python3 -m unittest discover -s tools/tests_licenses -v
 ```
 
@@ -99,7 +104,7 @@ Activate the ESP-IDF 5.3.6 environment before building. See [firmware instructio
 
 ## Contributing and licensing
 
-Original project code is licensed under [Apache-2.0](LICENSE). Vendored drivers and fonts retain their own licenses; see [NOTICE](NOTICE) and [third-party notices](THIRD_PARTY_NOTICES.md). Twitch emotes are downloaded at runtime and are not included as repository artwork or covered by the project license.
+Original project code is licensed under [Apache-2.0](LICENSE). Vendored drivers and fonts retain their own licenses; see [NOTICE](NOTICE) and [third-party notices](THIRD_PARTY_NOTICES.md). Runtime Twemoji artwork uses CC BY 4.0. Twitch/7TV emotes are downloaded at runtime and are not included as repository artwork or covered by the project license.
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) for checks and hardware evidence requirements, and [SECURITY.md](SECURITY.md) to report a vulnerability. Public issues and PRs must exclude credentials, device flash dumps and private chat captures. The hardware beta includes guarded native moderation, with real-action qualification tracked separately from passing host tests. Wearable power, charging, temperature and mounting qualification remain future work.
 
