@@ -9,6 +9,9 @@ extern "C" {
 // Call from the LVGL-owning task. Montserrat24 -> extended text24 ->
 // Noto Emoji24 -> readable replacement. No runtime rasterizer.
 const lv_font_t* forearm_body_font(void);
+// Compiled font sizes 16/18/20/22/24/28/30/32/36; unknown sizes use the default 24.
+// Smaller/larger sizes have native text bitmaps and bounded emoji fallbacks.
+const lv_font_t* forearm_body_font_for_size(unsigned pixels);
 const lv_font_t* forearm_emoji_font(void);
 
 // Attach this to a Montserrat24 font's fallback field. Adds extended Latin,

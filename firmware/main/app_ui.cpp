@@ -18,8 +18,19 @@
 namespace {
 constexpr std::size_t kHistory = 512;
 constexpr std::size_t kVisibleRows = 14;
-constexpr int kSide = 12;
-constexpr int kAuthorWidth = 224; // Keeps every author clear of the floating cog.
+int kSide = 12;
+int kAuthorWidth = 224; // Keeps every author clear of the floating cog.
+int row_top = 8, header_gap = 16, body_bottom = 12, minimum_row_height = 76, line_space = 4;
+constexpr std::array<unsigned, 9> kScalePercent{67, 75, 80, 90, 100, 115, 125, 133, 150};
+constexpr std::array<unsigned, 9> kBodySizes{16, 18, 20, 22, 24, 28, 30, 32, 36};
+unsigned scale_index = 4;
+const lv_font_t *ascii_author_font = &lv_font_montserrat_20;
+const lv_font_t *custom_fallback = nullptr;
+void (*scale_change_handler)(unsigned) = nullptr;
+unsigned requested_scale = 100;
+bool scale_update_requested = false, scale_commit_requested = false, scale_contact = false;
+void (*startup_preview_callback)() = nullptr;
+bool startup_preview_requested = false;
 static_assert(sizeof(lv_color_t) == 2, "Native row sprites require RGB565 pixels");
 constexpr std::size_t kBodyBytes = 2080;
 constexpr std::uint32_t kEmoteMarker = 0xF0000;
@@ -41,8 +52,9 @@ using Store = forearm::ChatStore<kHistory>;
 
 struct EmoteRow {
     unsigned count = 0;
-    char ids[8][65]{};
+    char ids[8][129]{};
     std::uint16_t offsets[8]{}, lengths[8]{};
+    std::uint16_t advances[8]{};
     std::uint8_t ready_mask = 0;
 };
 struct ModerationMetadata {
@@ -75,6 +87,7 @@ struct Row {
     bool deleted = false;
     bool sprite_attempted = false;
     bool author_attempted = false;
+    std::array<std::uint16_t, 8> emote_advances{};
     std::array<lv_obj_t *, 8> images{};
     std::array<const lv_img_dsc_t *, 8> image_sources{};
 };
@@ -90,11 +103,17 @@ int height = 480;
 int chat_height = 480;
 lv_font_t message_font = lv_font_montserrat_24;
 lv_font_t inline_font = lv_font_montserrat_24;
+const std::uint16_t *active_emote_advances = nullptr;
+struct InlineMetrics {
+    const std::uint16_t *previous = active_emote_advances;
+    explicit InlineMetrics(const std::uint16_t *advances) { active_emote_advances = advances; }
+    ~InlineMetrics() { active_emote_advances = previous; }
+};
 bool update_guard = false;
 bool layout_dirty = false;
 bool follow_dirty = false;
 bool history_expired = false;
-bool demo = true;
+bool demo = false;
 bool fixture_mode = false;
 bool authenticated = false;
 bool login_visible = false;
@@ -160,7 +179,7 @@ std::uint32_t pressed_tick = 0;
 lv_point_t pressed_point{};
 bool gesture_cancelled = false;
 char channel[96] = "#forearm";
-char network_status[128] = "Hardware demo";
+char network_status[128] = "Offline";
 char account_name[96] = "Not connected";
 char transient_status[128] = "";
 void (*login_callback)() = nullptr;
@@ -183,6 +202,9 @@ lv_obj_t *fixture_badge = nullptr;
 bool selection_visible = false;
 bool account_visible = false;
 bool account_refresh = false;
+lv_obj_t *size_slider = nullptr, *size_caption = nullptr;
+lv_obj_t *size_preview_author = nullptr, *size_preview_body = nullptr, *size_preview = nullptr;
+lv_obj_t *settings_account = nullptr, *settings_network = nullptr, *settings_detail = nullptr, *settings_connect = nullptr, *settings_credits = nullptr, *settings_startup = nullptr;
 bool read_only_profile = true;
 std::uint32_t profile_generation = 1;
 std::uint32_t target_profile_generation = 0;
@@ -265,7 +287,7 @@ lv_obj_t *label(lv_obj_t *parent, const char *text, int x, int y, int w,
     lv_obj_set_width(obj, w);
     lv_obj_set_style_text_font(obj, font, 0);
     lv_obj_set_style_text_color(obj, color(foreground), 0);
-    lv_obj_set_style_text_line_space(obj, 4, 0);
+    lv_obj_set_style_text_line_space(obj, line_space, 0);
     lv_label_set_text(obj, text ? text : "");
     return obj;
 }
@@ -282,7 +304,7 @@ lv_obj_t *button(lv_obj_t *parent, const char *text, int x, int y, int w, int h,
     lv_obj_set_style_radius(obj, 10, 0);
     lv_obj_set_style_bg_color(obj, color(0x49315E), LV_STATE_PRESSED);
     lv_obj_set_style_bg_opa(obj, LV_OPA_50, LV_STATE_DISABLED);
-    auto *caption = label(obj, text, 0, 0, w - 12, &lv_font_montserrat_20, kText);
+    auto *caption = label(obj, text, 0, 0, w - 12, ascii_author_font, kText);
     lv_obj_clear_flag(caption, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_style_text_align(caption, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_center(caption);
@@ -345,7 +367,9 @@ void update_status() {
 bool emote_glyph(const lv_font_t *, lv_font_glyph_dsc_t *out, std::uint32_t letter, std::uint32_t) {
     if (letter < kEmoteMarker || letter >= kEmoteMarker + 8) return false;
     *out = {};
-    out->adv_w = 28;
+    const auto index = letter - kEmoteMarker;
+    out->adv_w = active_emote_advances && active_emote_advances[index] ?
+        active_emote_advances[index] : lv_font_get_line_height(&message_font) + 1;
     out->bpp = 1;
     return true; // Zero ink; the matching bounded image object supplies pixels.
 }
@@ -358,7 +382,57 @@ const char *display_author(const forearm::Message &message) {
 const lv_font_t *author_font(const char *name) {
     for (const auto *c = reinterpret_cast<const unsigned char *>(name); *c; ++c)
         if (*c >= 0x80) return &message_font;
-    return &lv_font_montserrat_20;
+    return ascii_author_font;
+}
+
+unsigned nearest_scale(unsigned percent) {
+    const auto value = std::clamp<unsigned>(percent, kScalePercent.front(), kScalePercent.back());
+    unsigned best = 0;
+    for (unsigned i = 1; i < kScalePercent.size(); ++i)
+        if (std::abs(static_cast<int>(value) - static_cast<int>(kScalePercent[i])) <
+            std::abs(static_cast<int>(value) - static_cast<int>(kScalePercent[best]))) best = i;
+    return best;
+}
+int scaled(int value) { return (value * kScalePercent[scale_index] + 50) / 100; }
+void configure_scale_fonts() {
+    message_font = *forearm_body_font_for_size(kBodySizes[scale_index]);
+    if (kScalePercent[scale_index] == 100 && custom_fallback) message_font.fallback = custom_fallback;
+    inline_font = message_font;
+    inline_font.get_glyph_dsc = emote_glyph;
+    inline_font.get_glyph_bitmap = emote_bitmap;
+    inline_font.fallback = &message_font;
+    constexpr std::array<const lv_font_t *, 9> authors{
+        &lv_font_montserrat_16, &lv_font_montserrat_16, &lv_font_montserrat_16,
+        &lv_font_montserrat_18, &lv_font_montserrat_20, &lv_font_montserrat_22,
+        &lv_font_montserrat_24, &lv_font_montserrat_24, &lv_font_montserrat_24};
+    ascii_author_font = authors[scale_index];
+    kSide = scaled(12); kAuthorWidth = width - 72 - 2 * kSide;
+    row_top = scaled(8); header_gap = 2 * row_top; body_bottom = scaled(12);
+    minimum_row_height = scaled(76); line_space = scaled(4);
+}
+
+unsigned emote_zoom(const lv_img_dsc_t *source) {
+    const unsigned target = lv_font_get_line_height(&message_font);
+    return std::max<unsigned>(1, std::min(target * 256 / source->header.h,
+                                        target * 4 * 256 / source->header.w));
+}
+bool update_emote_metrics(EmoteRow &meta) {
+    std::uint8_t mask = 0;
+    bool changed = false;
+    for (unsigned i = 0; i < meta.count; ++i) {
+        unsigned advance = lv_font_get_line_height(&message_font) + 1;
+        if (const auto *source = emote_cache_get(meta.ids[i])) {
+            if (source->header.w && source->header.h) {
+                mask |= 1U << i;
+                advance = std::max<unsigned>(advance, (source->header.w * emote_zoom(source) + 255) / 256 + 1);
+            }
+        }
+        changed |= meta.advances[i] != advance;
+        meta.advances[i] = static_cast<std::uint16_t>(advance);
+    }
+    changed |= meta.ready_mask != mask;
+    meta.ready_mask = mask;
+    return changed;
 }
 
 void body_text(const forearm::Message &message, const EmoteRow *emotes, char *out) {
@@ -404,24 +478,25 @@ int text_height(const char *text, const lv_font_t *font, int available_width) {
     }
     if (offset && (text[offset - 1] == '\n' || text[offset - 1] == '\r')) ++lines;
     lines = std::max<unsigned>(lines, 1);
-    return lines * (lv_font_get_line_height(font) + 4) - 4;
+    return lines * (lv_font_get_line_height(font) + line_space) - line_space;
 }
 std::int32_t measure_message(const forearm::Message &message, const EmoteRow *emotes = nullptr,
                              std::uint16_t *author_height = nullptr) {
     ScopedDuration timer{measure_duration};
+    InlineMetrics metrics{emotes ? emotes->advances : nullptr};
     char text[kBodyBytes];
     body_text(message, emotes, text);
     const auto *name = display_author(message);
     const auto author = text_height(name, author_font(name), kAuthorWidth);
     if (author_height) *author_height = static_cast<std::uint16_t>(author);
-    return std::max<int>(76, 16 + author + text_height(text, &inline_font, width - 2 * kSide) + 12);
+    return std::max<int>(minimum_row_height, header_gap + author + text_height(text, &inline_font, width - 2 * kSide) + body_bottom);
 }
 
 void body_descriptor(const Row &row, lv_draw_label_dsc_t &descriptor) {
     lv_draw_label_dsc_init(&descriptor);
     descriptor.font = &inline_font;
     descriptor.color = color(row.deleted ? kMuted : kText);
-    descriptor.line_space = 4;
+    descriptor.line_space = line_space;
     descriptor.bidi_dir = LV_BASE_DIR_AUTO;
 }
 
@@ -472,7 +547,7 @@ bool author_style_safe(const Row &row) {
         lv_label_get_long_mode(obj) != LV_LABEL_LONG_WRAP || lv_label_get_recolor(obj) ||
         lv_obj_get_style_text_opa(obj, LV_PART_MAIN) != LV_OPA_COVER ||
         lv_obj_get_style_text_letter_space(obj, LV_PART_MAIN) ||
-        lv_obj_get_style_text_line_space(obj, LV_PART_MAIN) != 4 ||
+        lv_obj_get_style_text_line_space(obj, LV_PART_MAIN) != line_space ||
         lv_obj_get_style_base_dir(obj, LV_PART_MAIN) != LV_BASE_DIR_LTR ||
         lv_obj_get_style_text_decor(obj, LV_PART_MAIN) != LV_TEXT_DECOR_NONE ||
         lv_obj_calculate_style_text_align(obj, LV_PART_MAIN, lv_label_get_text(obj)) != LV_TEXT_ALIGN_LEFT ||
@@ -513,8 +588,8 @@ bool author_style_safe(const Row &row) {
 bool author_image_area(const Row &row, lv_area_t &area, int &gutter) {
     lv_obj_get_coords(row.author, &area);
     gutter = _lv_obj_get_ext_draw_size(row.author);
-    if (gutter < 0 || gutter > 7 || lv_area_get_width(&area) != kAuthorWidth ||
-        lv_area_get_height(&area) != row.body_y - 16) return false;
+    if (gutter < 0 || gutter >= row_top || lv_area_get_width(&area) != kAuthorWidth ||
+        lv_area_get_height(&area) != row.body_y - header_gap) return false;
     area.x1 -= gutter; area.x2 += gutter;
     area.y1 -= gutter; area.y2 += gutter;
     lv_area_t parent, body;
@@ -533,7 +608,7 @@ AuthorSprite *find_author_sprite(const Row &row) {
     const auto foreground = lv_obj_get_style_text_color_filtered(row.author, LV_PART_MAIN);
     for (auto &sprite : author_sprites)
         if (sprite.pixels && sprite.font_generation == font_generation && sprite.font == font &&
-            sprite.height == row.body_y - 16 && sprite.text_color.full == foreground.full &&
+            sprite.height == row.body_y - header_gap && sprite.text_color.full == foreground.full &&
             sprite.gutter == _lv_obj_get_ext_draw_size(row.author) &&
             !std::strcmp(sprite.name, name)) return &sprite;
     return nullptr;
@@ -553,7 +628,7 @@ void clear_author_sprites() {
 bool author_sprite_pinned(const AuthorSprite &sprite) {
     for (const auto &row : rows) {
         if (!row.sequence || !row.author || lv_obj_has_flag(row.button, LV_OBJ_FLAG_HIDDEN) ||
-            row.top + 8 >= scroll_y + chat_height || row.top + row.body_y - 8 <= scroll_y) continue;
+            row.top + row_top >= scroll_y + chat_height || row.top + row.body_y - row_top <= scroll_y) continue;
         if (find_author_sprite(row) == &sprite) return true;
     }
     return false;
@@ -716,6 +791,7 @@ void prepare_sprite(Row &row) {
     lv_canvas_set_buffer(sprite_canvas, pixels, body_width, row.body_height, LV_IMG_CF_TRUE_COLOR);
     lv_draw_label_dsc_t descriptor;
     body_descriptor(row, descriptor);
+    InlineMetrics metrics{row.emote_advances.data()};
     // Rasterize outside the main DRAW callback. This can cost one cold frame;
     // subsequent frames copy opaque RGB565 instead of mixing each glyph pixel.
     lv_canvas_draw_text(sprite_canvas, 0, 0, body_width, &descriptor, row.body_text);
@@ -750,7 +826,7 @@ void prepare_author_sprite(Row &row) {
     if (auto *sprite = find_author_sprite(row)) { sprite->last_used = ++author_cache_clock; return; }
     if (row.author_attempted) return;
     row.author_attempted = true;
-    const int author_height = row.body_y - 16;
+    const int author_height = row.body_y - header_gap;
     const int image_width = kAuthorWidth + 2 * gutter;
     const int image_height = author_height + 2 * gutter;
     const auto bytes = static_cast<std::size_t>(image_width) * image_height * sizeof(lv_color_t);
@@ -832,7 +908,7 @@ void prepare_visible_sprites() {
         if (!row.sequence || lv_obj_has_flag(row.button, LV_OBJ_FLAG_HIDDEN)) continue;
         const auto body_top = row.top + row.body_y;
         if (body_top < scroll_y + chat_height && body_top + row.body_height > scroll_y) prepare_sprite(row);
-        if (row.top + 8 < scroll_y + chat_height && row.top + row.body_y - 8 > scroll_y)
+        if (row.top + row_top < scroll_y + chat_height && row.top + row.body_y - row_top > scroll_y)
             prepare_author_sprite(row);
     }
 }
@@ -842,6 +918,7 @@ void body_draw_event(lv_event_t *event) {
     if (!row->body_text) return;
     lv_draw_label_dsc_t descriptor;
     body_descriptor(*row, descriptor);
+    InlineMetrics metrics{row->emote_advances.data()};
     lv_area_t area;
     lv_obj_get_coords(lv_event_get_target(event), &area);
     const auto started = esp_timer_get_time();
@@ -865,6 +942,7 @@ void body_draw_event(lv_event_t *event) {
 
 void render_emotes(Row &row, const Layout *item) {
     const auto *meta = item ? item->emotes : nullptr;
+    InlineMetrics metrics{meta ? meta->advances : nullptr};
     std::array<lv_point_t, 8> positions{};
     std::array<bool, 8> positioned{};
     if (meta && row.body_text) {
@@ -890,7 +968,7 @@ void render_emotes(Row &row, const Layout *item) {
                 x += lv_font_get_glyph_width(&inline_font, letter, next);
             }
             line = end;
-            y += lv_font_get_line_height(&inline_font) + 4;
+            y += lv_font_get_line_height(&inline_font) + line_space;
         }
     }
     for (unsigned i = 0; i < row.images.size(); ++i) {
@@ -909,10 +987,9 @@ void render_emotes(Row &row, const Layout *item) {
         if (row.image_sources[i] != source) {
             lv_img_set_src(row.images[i], source);
             row.image_sources[i] = source;
-            const auto largest = std::max<unsigned>(source->header.w, source->header.h);
-            const auto zoom = largest > 27 ? std::max<unsigned>(1, 27U * 256U / largest) : 256;
-            lv_img_set_zoom(row.images[i], zoom);
         }
+        const auto desired_zoom = emote_zoom(source);
+        if (lv_img_get_zoom(row.images[i]) != desired_zoom) lv_img_set_zoom(row.images[i], desired_zoom);
         const auto zoom = lv_img_get_zoom(row.images[i]);
         const int image_height = (source->header.h * zoom + 255) / 256;
         lv_obj_set_pos(row.images[i], positions[i].x,
@@ -929,11 +1006,7 @@ void refresh_visible_emotes() {
     for (std::size_t i = 0; i < layout_count; ++i) {
         auto &item = layout[i];
         if (!item.emotes) continue;
-        std::uint8_t mask = 0;
-        for (unsigned j = 0; j < item.emotes->count; ++j)
-            if (emote_cache_get(item.emotes->ids[j])) mask |= 1U << j;
-        if (mask == item.emotes->ready_mask) continue;
-        item.emotes->ready_mask = mask;
+        if (!update_emote_metrics(*item.emotes)) continue;
         const auto *message = store->at(i);
         if (!message) continue;
         const auto old_height = item.height;
@@ -1016,13 +1089,13 @@ void render_rows() {
             row.sprite_attempted = false;
             row.author_attempted = false;
         }
-        const auto body_y = 16 + item.author_height;
+        const auto body_y = header_gap + item.author_height;
         if (row.body_y != body_y) {
             lv_obj_set_y(row.body, body_y); row.body_y = body_y;
             row.sprite_attempted = false;
         }
         lv_obj_set_height(row.author, item.author_height);
-        const auto body_height = std::max<int>(27, item.height - body_y - 12);
+        const auto body_height = std::max<int>(lv_font_get_line_height(&inline_font), item.height - body_y - body_bottom);
         if (row.body_height != body_height) {
             lv_obj_set_height(row.body, body_height); row.body_height = body_height;
             row.sprite_attempted = false;
@@ -1037,6 +1110,8 @@ void render_rows() {
             const auto *name = display_author(*message);
             lv_obj_set_style_text_font(row.author, author_font(name), 0);
             lv_label_set_text(row.author, name);
+            row.emote_advances.fill(0);
+            if (item.emotes) std::copy(std::begin(item.emotes->advances), std::end(item.emotes->advances), row.emote_advances.begin());
             if (row.body_text) {
                 body_text(*message, item.emotes, row.body_text);
             }
@@ -1062,6 +1137,9 @@ void close_overlay() {
     login_visible = false;
     selection_visible = false;
     account_visible = false;
+    size_slider = size_caption = size_preview_author = size_preview_body = size_preview = nullptr;
+    settings_account = settings_network = settings_detail = settings_connect = settings_credits = settings_startup = nullptr;
+    scale_contact = false;
     close_requested = false;
     connect_requested = false;
     upgrade_requested = false;
@@ -1531,30 +1609,119 @@ void upgrade_event(lv_event_t *event) {
     upgrade_requested = true;
 }
 
+void refresh_size_preview() {
+    if (!size_slider || !size_preview) return;
+    char caption[48];
+    std::snprintf(caption, sizeof(caption), "Text size  %u%%", kScalePercent[scale_index]);
+    lv_label_set_text(size_caption, caption);
+    lv_obj_set_style_text_font(size_caption, ascii_author_font, 0);
+    lv_slider_set_value(size_slider, scale_index, LV_ANIM_OFF);
+    lv_obj_set_style_text_font(size_preview_author, ascii_author_font, 0);
+    lv_obj_set_style_text_font(size_preview_body, &message_font, 0);
+    lv_obj_set_style_text_line_space(size_preview_body, line_space, 0);
+    lv_obj_refresh_style(size_preview_body, LV_PART_MAIN, LV_STYLE_TEXT_FONT);
+    const int author_height = lv_font_get_line_height(ascii_author_font);
+    lv_obj_set_y(size_preview_body, 20 + author_height);
+    const int preview_height = 32 + author_height + text_height(lv_label_get_text(size_preview_body), &message_font, width - 52);
+    lv_obj_set_height(size_preview, preview_height);
+    const int next_y = 218 + preview_height + 18;
+    lv_obj_set_y(settings_network, next_y);
+    lv_obj_set_y(settings_detail, next_y + 66);
+    lv_obj_set_y(settings_connect, next_y + 138);
+    lv_obj_set_style_text_font(settings_network, ascii_author_font, 0);
+    lv_obj_set_style_text_font(settings_account, ascii_author_font, 0);
+    lv_obj_set_style_text_font(settings_detail, ascii_author_font, 0);
+    lv_obj_set_style_text_font(lv_obj_get_child(settings_connect, 0), ascii_author_font, 0);
+    lv_obj_set_y(settings_credits, next_y + 212);
+    lv_obj_set_style_text_font(settings_credits, &message_font, 0);
+    lv_obj_set_style_text_line_space(settings_credits, line_space, 0);
+    lv_obj_refresh_style(settings_credits, LV_PART_MAIN, LV_STYLE_TEXT_FONT);
+    lv_obj_set_y(settings_startup, next_y + 232 + text_height(lv_label_get_text(settings_credits), &message_font, width - 28));
+    lv_obj_set_style_text_font(lv_obj_get_child(settings_startup, 0), ascii_author_font, 0);
+}
+
+void startup_preview_event(lv_event_t *event) {
+    if (!startup_preview_callback) return;
+    startup_preview_requested = true;
+    lv_obj_add_state(lv_event_get_target(event), LV_STATE_DISABLED);
+}
+
+void size_slider_event(lv_event_t *event) {
+    const auto code = lv_event_get_code(event);
+    if (code == LV_EVENT_PRESSED) scale_contact = true;
+    else if (code == LV_EVENT_VALUE_CHANGED && scale_contact) {
+        const auto value = std::clamp<int>(lv_slider_get_value(lv_event_get_target(event)), 0, kScalePercent.size() - 1);
+        requested_scale = kScalePercent[value];
+        scale_update_requested = true;
+    } else if ((code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) && scale_contact) {
+        scale_contact = false;
+        scale_commit_requested = true;
+    }
+}
+
 void account_event(lv_event_t *) {
     auto *panel = new_overlay();
     account_visible = true;
     label(panel, "FOREARM CHAT", 14, 14, width - 28, &lv_font_montserrat_20, kViolet);
-    auto *channel_name = label(panel, channel, 14, 51, width - 28, &lv_font_montserrat_28, kText);
-    lv_label_set_long_mode(channel_name, LV_LABEL_LONG_DOT);
-    lv_obj_set_height(channel_name, 36);
-    auto *account = label(panel, authenticated ? account_name : "Not connected to Twitch", 14, 98,
-                          width - 28, &lv_font_montserrat_20, kText);
-    lv_label_set_long_mode(account, LV_LABEL_LONG_DOT);
-    lv_obj_set_height(account, 28);
-    label(panel, read_only() ? "READ ONLY" : demo ? "Demo chat" : store && store->paused() ? "Twitch chat / paused" : "Twitch chat / live",
-          14, 139, width - 28, &lv_font_montserrat_20, read_only() ? kAmber : kViolet);
-    auto *network = label(panel, network_status, 14, 181, width - 28, &lv_font_montserrat_20, kMuted);
-    lv_label_set_long_mode(network, LV_LABEL_LONG_DOT);
-    lv_obj_set_height(network, 60);
-    auto *detail = label(panel, read_only() ? "Chat viewing only.\nModeration stays disabled." : history_expired ? "Older history expired." : transient_status[0] ? transient_status :
+    auto *details = plain(panel, 0, 48, width, height - 128, kInk);
+    lv_obj_set_style_bg_opa(details, LV_OPA_TRANSP, 0);
+    lv_obj_add_flag(details, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(details, LV_OBJ_FLAG_SCROLL_ELASTIC);
+    lv_obj_set_scroll_dir(details, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(details, LV_SCROLLBAR_MODE_AUTO);
+    lv_obj_set_style_width(details, 3, LV_PART_SCROLLBAR);
+    lv_obj_set_style_bg_color(details, color(kMuted), LV_PART_SCROLLBAR);
+    lv_obj_set_style_bg_opa(details, LV_OPA_70, LV_PART_SCROLLBAR);
+    lv_obj_set_style_radius(details, 2, LV_PART_SCROLLBAR);
+    auto *channel_name = label(details, channel, 14, 0, width - 28, &lv_font_montserrat_28, kText);
+    lv_label_set_long_mode(channel_name, LV_LABEL_LONG_DOT); lv_obj_set_height(channel_name, 36);
+    settings_account = label(details, authenticated ? account_name : "Not connected to Twitch", 14, 44,
+                          width - 28, ascii_author_font, kText);
+    lv_label_set_long_mode(settings_account, LV_LABEL_LONG_DOT); lv_obj_set_height(settings_account, 28);
+    label(details, read_only() ? "READ ONLY" : demo ? "Demo chat" : store && store->paused() ? "Twitch chat / paused" : "Twitch chat / live",
+          14, 82, width - 28, &lv_font_montserrat_16, read_only() ? kAmber : kViolet);
+    size_caption = label(details, "", 14, 118, width - 28, &lv_font_montserrat_20, kText);
+    size_slider = lv_slider_create(details);
+    lv_obj_remove_style_all(size_slider);
+    lv_obj_set_pos(size_slider, 32, 172); lv_obj_set_size(size_slider, width - 64, 8);
+    lv_obj_set_ext_click_area(size_slider, 18); // 44px minimum touch height.
+    lv_slider_set_range(size_slider, 0, kScalePercent.size() - 1);
+    lv_obj_set_style_bg_color(size_slider, color(0x30283B), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(size_slider, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_radius(size_slider, 4, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(size_slider, color(0x9B71F5), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_opa(size_slider, LV_OPA_COVER, LV_PART_INDICATOR);
+    lv_obj_set_style_radius(size_slider, 4, LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(size_slider, color(kText), LV_PART_KNOB);
+    lv_obj_set_style_bg_opa(size_slider, LV_OPA_COVER, LV_PART_KNOB);
+    lv_obj_set_style_radius(size_slider, LV_RADIUS_CIRCLE, LV_PART_KNOB);
+    lv_obj_set_style_pad_all(size_slider, 10, LV_PART_KNOB);
+    lv_obj_add_event_cb(size_slider, size_slider_event,
+                        static_cast<lv_event_code_t>(LV_EVENT_ALL | LV_EVENT_PREPROCESS), nullptr);
+    label(details, "Compact", 14, 190, 96, &lv_font_montserrat_16, kMuted);
+    auto *normal = label(details, "Default", 112, 190, 96, &lv_font_montserrat_16, kMuted);
+    lv_obj_set_style_text_align(normal, LV_TEXT_ALIGN_CENTER, 0);
+    auto *large = label(details, "Large", width - 110, 190, 96, &lv_font_montserrat_16, kMuted);
+    lv_obj_set_style_text_align(large, LV_TEXT_ALIGN_RIGHT, 0);
+    size_preview = plain(details, 14, 218, width - 28, 120, kSurface);
+    lv_obj_set_style_radius(size_preview, 12, 0);
+    size_preview_author = label(size_preview, "chat preview", 12, 10, width - 52, ascii_author_font, kViolet);
+    size_preview_body = label(size_preview, "A little chat,\na little closer.", 12, 44, width - 52, &message_font, kText);
+    lv_label_set_long_mode(size_preview_body, LV_LABEL_LONG_WRAP);
+    settings_network = label(details, network_status, 14, 360, width - 28, &lv_font_montserrat_20, kMuted);
+    lv_label_set_long_mode(settings_network, LV_LABEL_LONG_DOT); lv_obj_set_height(settings_network, 60);
+    settings_detail = label(details, read_only() ? "Chat viewing only.\nModeration stays disabled." : history_expired ? "Older history expired." : transient_status[0] ? transient_status :
                          authenticated ? "Standalone over Wi-Fi." : "Authorize on your phone.",
-                         14, 251, width - 28, &lv_font_montserrat_20, history_expired ? kAmber : kMuted);
-    lv_label_set_long_mode(detail, LV_LABEL_LONG_DOT);
-    lv_obj_set_height(detail, 60);
+                         14, 426, width - 28, &lv_font_montserrat_20, history_expired ? kAmber : kMuted);
+    lv_label_set_long_mode(settings_detail, LV_LABEL_LONG_DOT); lv_obj_set_height(settings_detail, 64);
     const bool upgrade = !read_only() && authenticated && (!moderation_caps.can_delete || !moderation_caps.can_ban);
-    button(panel, upgrade ? "Enable moderation" : authenticated ? "Reconnect Twitch" : "Connect Twitch", 14, 326, width - 28, 56,
-           upgrade ? upgrade_event : connect_event, 0x76509E);
+    settings_connect = button(details, upgrade ? "Enable moderation" : authenticated ? "Reconnect Twitch" : "Connect Twitch", 14, 498, width - 28, 56,
+                             upgrade ? upgrade_event : connect_event, 0x76509E);
+    settings_credits = label(details, "Emoji artwork: Twemoji\nCC BY 4.0 • see project notices", 14, 572, width - 28, &message_font, kMuted);
+    lv_label_set_long_mode(settings_credits, LV_LABEL_LONG_WRAP);
+    settings_startup = button(details, "Preview startup", 14, 664, width - 28, 56, startup_preview_event);
+    if (!startup_preview_callback) lv_obj_add_state(settings_startup, LV_STATE_DISABLED);
+    refresh_size_preview();
     button(panel, LV_SYMBOL_LEFT "  Back", 14, height - 70, width - 28, 56, close_event);
 }
 
@@ -1587,9 +1754,7 @@ void settings_event(lv_event_t *event) {
 } // namespace
 
 void app_ui_init() {
-    inline_font.get_glyph_dsc = emote_glyph;
-    inline_font.get_glyph_bitmap = emote_bitmap;
-    inline_font.fallback = &message_font;
+    configure_scale_fonts();
     void *memory = heap_caps_malloc(sizeof(Store), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!memory) {
         ESP_LOGE(kTag, "Unable to allocate bounded chat history in PSRAM");
@@ -1637,7 +1802,7 @@ void app_ui_init() {
         lv_obj_set_style_border_color(row.button, color(0x211C2A), 0);
         lv_obj_set_style_border_width(row.button, 1, 0);
         lv_obj_set_style_border_side(row.button, LV_BORDER_SIDE_BOTTOM, 0);
-        row.author = label(row.button, "", kSide, 8, kAuthorWidth, &message_font, kViolet);
+        row.author = label(row.button, "", kSide, row_top, kAuthorWidth, &message_font, kViolet);
         lv_obj_add_event_cb(row.author, author_draw_event,
                             static_cast<lv_event_code_t>(LV_EVENT_DRAW_MAIN | LV_EVENT_PREPROCESS), &row);
         lv_label_set_long_mode(row.author, LV_LABEL_LONG_WRAP);
@@ -1677,8 +1842,6 @@ void app_ui_init() {
     lv_obj_set_style_bg_color(fixture_badge, color(kSurface), 0);
     lv_obj_set_style_bg_opa(fixture_badge, LV_OPA_COVER, 0);
     lv_obj_add_flag(fixture_badge, LV_OBJ_FLAG_HIDDEN);
-    next_demo_ms = now_ms() + 2800;
-    app_ui_demo_burst(12);
     app_ui_tick();
     update_status();
     ESP_LOGI(kTag, "Native UI ready: %dx%d; history=%u; pool=%u; PSRAM bytes=%u",
@@ -1693,6 +1856,21 @@ void app_ui_tick() {
         settings_requested = false;
         consume_contact();
         account_event(nullptr);
+    }
+    if (scale_update_requested) {
+        scale_update_requested = false;
+        app_ui_set_ui_scale(requested_scale);
+    }
+    if (scale_commit_requested) {
+        scale_commit_requested = false;
+        if (scale_change_handler) scale_change_handler(kScalePercent[scale_index]);
+    }
+    if (startup_preview_requested) {
+        startup_preview_requested = false;
+        consume_contact(); close_overlay(); store->clearSelection();
+        layout_dirty = follow_dirty = true;
+        lv_obj_invalidate(screen);
+        if (startup_preview_callback) startup_preview_callback();
     }
     if (close_requested) {
         const bool start_login = connect_requested;
@@ -1723,7 +1901,7 @@ void app_ui_tick() {
             } else app_ui_show_setup("Connect Twitch", "Configure Wi-Fi and a public Twitch Client ID over USB first.");
         }
     }
-    if (account_refresh) {
+    if (account_refresh && !scale_contact) {
         account_refresh = false;
         if (account_visible) {
             consume_contact();
@@ -1841,8 +2019,8 @@ void app_ui_set_message_emotes(const char *channel_id, const char *message_id,
         auto *meta = new (memory) EmoteRow();
         for (unsigned j = 0; j < std::min<unsigned>(emote_count, 8); ++j) {
             if (!emotes[j].id || !emotes[j].text || !emotes[j].position_valid || !emotes[j].byte_length) continue;
-            const auto len = strnlen(emotes[j].id, 65);
-            if (!len || len > 64) continue;
+            const auto len = strnlen(emotes[j].id, 129);
+            if (!len || len > 128) continue;
             const auto offset = emotes[j].byte_offset, bytes = emotes[j].byte_length;
             const auto end = static_cast<std::size_t>(offset) + bytes;
             const auto *raw = message->text.c_str();
@@ -1858,10 +2036,10 @@ void app_ui_set_message_emotes(const char *channel_id, const char *message_id,
             std::memcpy(meta->ids[meta->count], emotes[j].id, len + 1);
             meta->offsets[meta->count] = offset;
             meta->lengths[meta->count] = bytes;
-            if (emote_cache_get(emotes[j].id)) meta->ready_mask |= 1U << meta->count;
             ++meta->count;
         }
         if (!meta->count) { heap_caps_free(meta); return; }
+        update_emote_metrics(*meta);
         std::int32_t old_top = 0;
         const auto old_first = first_visible(&old_top);
         const auto old_offset = scroll_y - old_top;
@@ -1941,6 +2119,7 @@ void app_ui_set_read_only(bool enabled) {
 void app_ui_set_demo(bool enabled) {
     if (demo == enabled) return;
     demo = enabled;
+    if (enabled) next_demo_ms = now_ms() + 2800;
     if (!enabled && store) {
         // Synthetic rows cannot be mistaken for messages from the real channel.
         reset_chat_history();
@@ -2064,6 +2243,7 @@ void app_ui_demo_burst(unsigned count) {
 }
 AppUiStats app_ui_stats() {
     AppUiStats result{};
+    result.ui_scale_percent = app_ui_ui_scale();
     if (!store) return result;
     result.paused = store->paused();
     result.demo = demo;
@@ -2201,26 +2381,64 @@ void app_ui_moderation_result(const forearm::ModerationResult &result) {
     }
 }
 
-void app_ui_set_font_fallback(const _lv_font_t *fallback) {
+namespace {
+void reflow_typography() {
     std::int32_t old_top = 0;
     const auto old_first = layout_count ? first_visible(&old_top) : 0;
     const auto old_offset = scroll_y - old_top;
-    message_font.fallback = fallback;
-    clear_sprites();
-    clear_author_sprites();
-    ++font_generation;
+    clear_sprites(); clear_author_sprites(); ++font_generation;
     if (!store) return;
+    if (selection_visible) { consume_contact(); close_overlay(); }
+    store->clearSelection();
+    moderation_navigation = ModerationNavigation::None;
+    moderation_target = {};
+    selected_metadata_verified = false;
+    ++modal_generation;
     total_height = 0;
     std::int32_t new_top = 0;
     for (std::size_t i = 0; i < layout_count; ++i) {
         if (i == old_first) new_top = total_height;
-        const auto *message = store->find(layout[i].sequence);
-        if (message && !message->deleted)
+        if (layout[i].emotes) update_emote_metrics(*layout[i].emotes);
+        if (const auto *message = store->find(layout[i].sequence))
             layout[i].height = measure_message(*message, layout[i].emotes, &layout[i].author_height);
         total_height += layout[i].height;
     }
-    if (store->paused()) scroll_y = new_top + old_offset;
-    layout_dirty = true;
+    if (store->paused() && layout_count)
+        scroll_y = new_top + std::min<std::int32_t>(old_offset, layout[old_first].height - 1);
+    for (auto &row : rows) {
+        row.font_generation = 0;
+        lv_obj_set_pos(row.author, kSide, row_top); lv_obj_set_width(row.author, kAuthorWidth);
+        lv_obj_set_style_text_line_space(row.author, line_space, 0);
+        lv_obj_refresh_style(row.author, LV_PART_MAIN, LV_STYLE_TEXT_FONT);
+        lv_obj_set_x(row.body, kSide); lv_obj_set_width(row.body, width - 2 * kSide);
+    }
+    lv_obj_set_style_text_font(follow_label, ascii_author_font, 0);
+    lv_obj_set_style_text_font(empty_hint, &message_font, 0);
+    lv_obj_set_style_text_line_space(empty_hint, line_space, 0);
+    lv_obj_refresh_style(empty_hint, LV_PART_MAIN, LV_STYLE_TEXT_FONT);
+    if (account_visible) refresh_size_preview();
+    layout_dirty = follow_dirty = true;
+    lv_obj_invalidate(screen);
+}
+} // namespace
+
+void app_ui_set_font_fallback(const _lv_font_t *fallback) {
+    custom_fallback = fallback;
+    configure_scale_fonts();
+    reflow_typography();
+}
+void app_ui_set_ui_scale(unsigned percent) {
+    const auto next = nearest_scale(percent);
+    if (next == scale_index) return;
+    scale_index = next;
+    configure_scale_fonts();
+    reflow_typography();
+}
+unsigned app_ui_ui_scale() { return kScalePercent[scale_index]; }
+void app_ui_set_scale_change_handler(void (*handler)(unsigned)) { scale_change_handler = handler; }
+void app_ui_set_startup_preview_callback(void (*callback)()) {
+    startup_preview_callback = callback;
+    if (account_visible) account_refresh = true;
 }
 
 void app_ui_reset_perf() {

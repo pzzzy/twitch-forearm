@@ -1,10 +1,14 @@
 # Native runtime
 
-Forearm Chat 0.4.0-beta.1 is a standalone **hardware beta** for the ESP32-S3 display. This document describes saved read-only profiles, complete sender-name fallback, positioned inline static emotes and the native runtime contract. A release's attached qualification summary and notes identify the exact tested source/image and results. [Verification](verification.md) preserves historical revisions, including the rejected `54c1169c` soak; those records do not qualify another build. Host passes do not establish device results. Battery/power/thermal/mount qualification is outside this beta's qualified scope.
+Forearm Chat 0.5.0-dev is development firmware for the ESP32-S3 display. This document includes the new size control, startup animation and richer media pipeline. The latest qualified binary remains 0.4.0-beta.1. A release's attached qualification summary and notes identify the exact tested source/image and results. [Verification](verification.md) preserves historical revisions, including the rejected `54c1169c` soak; those records do not qualify another build. Host passes do not establish device results. Battery/power/thermal/mount qualification remains separate.
 
 ## Reading and controls
 
-The 320 × 480 portrait screen gives chat the full panel, with floating settings and pause/Go live controls. Main text is 24 px; visible circles occupy 52 px. The settings circle has a transparent 72 × 72 px corner target above chat rows and rejects a dragged contact. Settings show the channel, authorized account, profile and connection state, and offer the phone-assisted Twitch login flow.
+The 320 × 480 portrait screen gives chat the full panel, with floating settings and pause/Go live controls. Main text defaults to 24 px; visible circles occupy 52 px. The settings circle has a transparent 72 × 72 px corner target above chat rows and rejects a dragged contact. Settings show the channel, authorized account, profile and connection state, and offer the phone-assisted Twitch login flow.
+
+The Text size slider previews nine native text families live: 67/75/80/90/100/115/125/133/150%, corresponding to 16/18/20/22/24/28/30/32/36 px body text. Author, control and emote geometry responds while controls retain minimum touch areas; long messages and authors reflow. Paused history keeps its message anchor, and an open message selection is invalidated when typography changes. The setting is saved on slider release in a separate NVS namespace; Wi-Fi/login/profile data is preserved. Settings can scroll when its preview grows.
+
+Boot displays a nonblocking 2.2-second vector animation with a violet/teal signal resolving into a chat mark. Networking starts independently. Touch dismisses the overlay without selecting the chat beneath it; Settings has a Preview startup button. Automatic synthetic demo messages are off; demo/fixture workloads remain explicit diagnostics.
 
 Live following stays at the newest retained message. Touching or dragging chat pauses following so content cannot move beneath a deliberate selection. Reception continues, unread increases and the viewport remains anchored by message sequence and pixel offset. Go live deliberately returns to the tail. Layout correction and new arrivals are not intended to reactivate pause after that action.
 
@@ -40,8 +44,9 @@ be undone. Twitch remains authoritative if a role or protected target changes.
 The PSRAM store holds 512 messages. Its 2,049-byte owned text field accommodates Twitch's 500-character maximum even when each codepoint uses four UTF-8 bytes. Stable IDs are rejected rather than truncated; text truncates only at a valid UTF-8 boundary. Selection is copied separately so buffer reuse cannot retarget it.
 
 Each record separately owns up to 100 UTF-8 bytes of display name and the exact
-ASCII user login of at most 25 characters. Supported Unicode names wrap at 24 px;
-ASCII names use 20 px. The 224 px author column stays clear of the settings target.
+ASCII user login of at most 25 characters. At 100%, supported Unicode names wrap at 24 px,
+ASCII names use 20 px, and the author column is 224 px. Typography and column geometry
+respond to the slider while staying clear of the settings target.
 Names are not shortened. If a display name needs an unavailable glyph, the row and
 selection use its full login fallback. Network normalization also uses that
 login when the supplied display name is empty or exceeds the bound; it never
@@ -50,17 +55,21 @@ ID rather than either displayed name.
 
 History is local RAM, not server history: messages arrive after reception begins, old messages are evicted at the bound and reboot clears them. Retention expiry is visible. Twitch does not replay an EventSub outage; the app reports a connection gap. Deletion/clear events update retained rows while paused.
 
-Montserrat24 has 819 additional accented Latin, Greek, Cyrillic, punctuation, currency and arrow glyphs, plus 1,380 monochrome Noto Emoji glyphs. Unsupported characters receive a readable replacement. Joiners, variation selectors and emoji tag controls are zero width. LVGL 8 performs codepoint lookup rather than full emoji shaping: family ZWJ sequences, skin-tone combinations, country flags and keycaps may appear as separate components. This is not complete Unicode-script coverage or color emoji support. Font provenance and licenses are in [the font component](../firmware/components/forearm_fonts/README.md).
+The compiled families have accented Latin, Greek, Cyrillic, punctuation, currency and arrow fallbacks, plus 1,380 monochrome Noto Emoji glyphs. Unsupported characters receive a readable replacement. Joiners, variation selectors and emoji tag controls are zero width. These fonts remain codepoint-based fallbacks; the separate color-image matcher below combines supported sequences. This is not complete Unicode-script shaping. Font provenance and licenses are in [the font component](../firmware/components/forearm_fonts/README.md).
 
-## Twitch emotes
+## Twitch, 7TV and color emoji
 
-EventSub retains up to eight emote occurrences per message, each with its own UTF-8 byte offset and length. The parser checks that all fragment text concatenates to the original message; the UI also verifies each range, literal token and non-overlap. A loaded static image replaces only that verified occurrence inline. The same trigger elsewhere remains literal unless its own fragment identifies it as an emote. Repeated IDs can occupy separate positions.
+Up to eight image occurrences share a per-message budget, each with its own UTF-8 byte offset and length. Native Twitch fragments have priority: the parser checks that fragment text concatenates to the original message. Remaining positions can match 7TV global names or names from the configured channel's catalog, on word boundaries. A channel alias overrides a global alias. Other channels' aliases are not applied. The UI independently verifies each range, literal token and non-overlap before replacing it. Repeated IDs can occupy separate positions.
+
+Color emoji use a pinned Twemoji 17.0.2 PNG-key allowlist. Supported joined families, skin tones, country flags and keycaps form one inline image; unsupported or malformed clusters stay literal. An explicit text-presentation selector is respected. Artwork is fetched from a fixed HTTPS CDN path pinned to an immutable upstream commit. [Provenance and licensing](media-provenance.json) records the source; Settings includes attribution.
 
 Original message text remains stored. Missing/invalid positions, occurrences beyond the bound, allocation/cache limits and unavailable assets retain readable trigger text. Images compact their matching tokens when ready, so affected rows are remeasured while preserving the paused message anchor; there is no separate emote strip. A shrinking anchor row clamps its offset to the remaining row.
 
-A lower-priority worker uses verified HTTPS to the fixed Twitch CDN origin with a validated ID and static/dark/1.0 path. Arbitrary asset URLs and redirects are rejected. Source PNGs are limited to 32 KiB and inspected before decode; dimensions must not exceed 128 × 128. Decompression/metadata are bounded, and RGB565-plus-alpha output lives in PSRAM.
+A lower-priority worker uses verified HTTPS to fixed Twitch, 7TV and pinned Twemoji CDN paths with validated identifiers. Arbitrary asset URLs and redirects are rejected; Twitch credentials are never sent to 7TV or the emoji CDN. Source PNGs are limited to 32 KiB and inspected before decode; dimensions must not exceed 128 × 128. Decompression/metadata are bounded. RGB565-plus-alpha output is downsampled to at most 48 px high / 128 px wide, preserving aspect ratio, and lives in PSRAM. Inline layout scales images with the selected typography and preserves wide emotes.
 
-Sixteen immutable entries per boot share a 512 KiB decoded-pixel budget. Ready pointers are never overwritten or evicted while LVGL or display transfers may reference them. Downloads yield to authorization and queued chat, retry with bounds/backoff and start no faster than once per second. Full caches and download failures retain text fallbacks. Animated and third-party emotes are not implemented.
+Sixty-four immutable entries per boot share a 512 KiB decoded-pixel budget. Ready pointers are never overwritten or evicted while LVGL or display transfers may reference them. Downloads yield to authorization and queued chat, retry with bounds/backoff and start no faster than once per second. Full caches and download failures retain text fallbacks. Animated 7TV sources use static poster PNGs; animation and other third-party providers are not implemented.
+
+The public 7TV global and configured-channel catalogs are fetched after Twitch resolves the selected broadcaster ID. Streaming JSON parsing avoids a complete in-memory document. Catalog storage is bounded to 512 aliases and a 4 MiB response ceiling; statistics expose fetch failures and truncation. Failed catalogs preserve text and native Twitch/emoji operation. Catalogs and media are RAM caches and reload after reboot.
 
 The diagnostic PNG-seed path uses the same decoder without a CDN request and must be labeled as an offline fixture. The actual CDN path has separately downloaded and displayed Kappa, ID `25`.
 

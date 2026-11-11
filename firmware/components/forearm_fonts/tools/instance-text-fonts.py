@@ -7,7 +7,10 @@ import fontTools
 from fontTools.ttLib import TTFont
 from fontTools.varLib.instancer import instantiateVariableFont
 
-assert fontTools.__version__ == "4.60.1", "Use the pinned fonttools environment"
+assert fontTools.__version__ == "4.60.2", (
+    "Use FontTools 4.60.2 from tools/font-requirements.txt; update the generator's "
+    "tools/.font-venv before converting fonts"
+)
 component = Path(__file__).resolve().parents[1]
 provenance = json.loads((component / "assets/extended-text-provenance.json").read_text())
 for record in provenance["files"]:

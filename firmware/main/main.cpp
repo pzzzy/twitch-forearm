@@ -11,6 +11,7 @@
 #include "twitch_client.h"
 #include "forearm/load_schedule.h"
 #include "emote_cache.h"
+#include "startup_animation.h"
 #include "cJSON.h"
 #include "driver/usb_serial_jtag.h"
 #include "driver/usb_serial_jtag_vfs.h"
@@ -23,6 +24,7 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "lvgl.h"
+#include "nvs.h"
 
 namespace {
 uint16_t* snapshot;
@@ -30,6 +32,31 @@ uint32_t capture_generation;
 uint32_t fixture_sequence;
 SemaphoreHandle_t usb_output_mutex;
 uint32_t usb_reply_errors;
+bool ui_preferences_saved = true;
+
+void preview_startup() {
+    startup_animation_start(esp_timer_get_time()/1000);
+    startup_animation_set_status("Your chat, within reach.");
+}
+
+void save_ui_scale(unsigned percent) {
+    nvs_handle_t handle;
+    ui_preferences_saved = nvs_open("forearm_ui", NVS_READWRITE, &handle) == ESP_OK;
+    if (!ui_preferences_saved) { app_ui_set_status("Size changed; saving failed"); return; }
+    ui_preferences_saved = nvs_set_u8(handle, "scale", static_cast<uint8_t>(percent)) == ESP_OK &&
+                           nvs_commit(handle) == ESP_OK;
+    nvs_close(handle);
+    if (!ui_preferences_saved) app_ui_set_status("Size changed; saving failed");
+}
+
+void load_ui_preferences() {
+    nvs_handle_t handle;
+    if (nvs_open("forearm_ui", NVS_READONLY, &handle) != ESP_OK) return;
+    uint8_t scale = 100;
+    if (nvs_get_u8(handle, "scale", &scale) == ESP_OK && scale >= 67 && scale <= 150)
+        app_ui_set_ui_scale(scale);
+    nvs_close(handle);
+}
 
 int usb_log_vprintf(const char* format, va_list arguments) {
     // SDK workers share the USB endpoint with diagnostic JSON. Hold one lock
@@ -219,6 +246,8 @@ void status(cJSON* response) {
     cJSON_AddStringToObject(response,"app_elf_sha256",elf_hash);
     metric(response, "uptime_ms", esp_timer_get_time()/1000);
     metric(response,"usb_reply_errors",usb_reply_errors);
+    flag(response,"startup_animation_active",startup_animation_active());
+    flag(response,"ui_preferences_saved",ui_preferences_saved);
     auto touch_check=cJSON_AddObjectToObject(response,"touch_check");
     flag(touch_check,"active",touch_check_overlay!=nullptr);metric(touch_check,"accepted",touch_check_count);
     metric(touch_check,"missed",touch_check_missed);
@@ -314,6 +343,7 @@ void status(cJSON* response) {
 #undef UM
     flag(ui, "paused", u.paused); flag(ui, "demo", u.demo); flag(ui, "authenticated", u.authenticated);
     flag(ui,"fixture_mode",u.fixture_mode);
+    metric(ui,"ui_scale_percent",u.ui_scale_percent);
     flag(ui, "login_visible", u.login_visible); flag(ui, "selection_visible", u.selection_visible);
     flag(ui,"sprite_cache_enabled",u.sprite_cache_enabled);
     flag(ui,"author_cache_enabled",u.author_cache_enabled);
@@ -343,6 +373,7 @@ void status(cJSON* response) {
     flag(net,"moderation_ban_granted",t.moderation_ban_granted);
     flag(net,"moderation_role_verified",t.moderation_role_verified);
     cJSON_AddStringToObject(net, "channel", t.channel); cJSON_AddStringToObject(net, "login", t.login);
+    cJSON_AddStringToObject(net,"broadcaster_id",t.broadcaster_id);
     cJSON_AddStringToObject(net, "state", t.state);
     const auto em=emote_cache_stats();
     auto cache=cJSON_AddObjectToObject(response,"emotes");
@@ -351,6 +382,10 @@ void status(cJSON* response) {
     metric(cache,"requested",em.requested);metric(cache,"ready",em.ready);
     metric(cache,"failed",em.failed);metric(cache,"rejected",em.rejected);
     metric(cache,"downloads",em.downloads);metric(cache,"bytes",em.bytes);metric(cache,"decoded_bytes",em.decoded_bytes);
+    metric(cache,"catalog_entries",em.catalog_entries);metric(cache,"catalog_global_entries",em.catalog_global_entries);
+    metric(cache,"catalog_channel_entries",em.catalog_channel_entries);metric(cache,"catalog_fetches",em.catalog_fetches);
+    metric(cache,"catalog_failures",em.catalog_failures);metric(cache,"catalog_truncated",em.catalog_truncated);
+    flag(cache,"catalog_ready",em.catalog_ready);flag(cache,"catalog_channel_matched",em.catalog_channel_matched);
     metric(ui,"emote_rows",u.emote_rows);metric(ui,"visible_emote_images",u.visible_emote_images);
     auto fixtures=cJSON_AddObjectToObject(response,"fixtures");
     flag(fixtures,"enabled",fixture_mode);flag(fixtures,"load_active",fixture_load.active());
@@ -397,6 +432,17 @@ void command(char* input) {
         if(ok){fixture_length=length;snprintf(fixture_pattern,sizeof(fixture_pattern),"%s",pattern);fixture_append_rejected=0;}
     }
     else if (!strcmp(cmd,"load_stop")) fixture_load.stop(esp_timer_get_time()/1000);
+    else if (!strcmp(cmd,"ui_scale")) {
+        const auto* value = cJSON_GetObjectItemCaseSensitive(request,"percent");
+        const int percent = num(request,"percent",100);
+        ok = cJSON_IsNumber(value) && value->valuedouble == percent && percent >= 67 && percent <= 150;
+        if (ok) {
+            app_ui_set_ui_scale(static_cast<unsigned>(percent));
+            if (cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(request,"save")))
+                save_ui_scale(app_ui_ui_scale());
+        }
+    }
+    else if (!strcmp(cmd,"startup_preview")) preview_startup();
     else if (!strcmp(cmd, "pause")) app_ui_pause();
     else if (!strcmp(cmd, "live")) app_ui_go_live();
     else if (!strcmp(cmd, "scroll")) app_ui_scroll(std::clamp(num(request, "pixels"), -20000, 20000));
@@ -423,6 +469,18 @@ void command(char* input) {
                 if(emote.position_valid) {
                     emote.byte_offset=static_cast<uint16_t>(start);emote.byte_length=static_cast<uint16_t>(bytes);
                 }
+            }
+            forearm::MediaOccurrence media[8]{};
+            if (cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(request,"enrich"))) {
+                for (unsigned i=0;i<count;++i) {
+                    snprintf(media[i].id,sizeof(media[i].id),"%s",emotes[i].id);
+                    snprintf(media[i].text,sizeof(media[i].text),"%s",emotes[i].text);
+                    media[i].byte_offset=emotes[i].byte_offset;media[i].byte_length=emotes[i].byte_length;
+                    media[i].position_valid=emotes[i].position_valid;
+                }
+                count=emote_cache_collect(str(request,"channel_id"),text,media,count);
+                for (unsigned i=0;i<count;++i) emotes[i]={media[i].id,media[i].text,
+                    media[i].byte_offset,media[i].byte_length,media[i].position_valid};
             }
             ok=app_ui_append_emotes("demo",id,"fixture-viewer",*name?name:"layout_test",text,emotes,count,
                                     esp_timer_get_time()/1000,str(request,"user_login"));
@@ -500,6 +558,7 @@ void network_events() {
         switch(e.kind) {
             case TwitchEventKind::Status:
                 app_ui_set_network(e.text);
+                startup_animation_set_status(e.text);
                 if (!twitch_status().login_pending) app_ui_hide_login();
                 break;
             case TwitchEventKind::Login:
@@ -562,11 +621,17 @@ extern "C" void app_main() {
     app_ui_set_moderation_login_callback(twitch_request_login);
     app_ui_set_moderation_callback(submit_moderation);
     network_started=twitch_start();
+    load_ui_preferences();
+    app_ui_set_scale_change_handler(save_ui_scale);
+    app_ui_set_startup_preview_callback(preview_startup);
     emote_cache_init();
     if (!network_started) app_ui_set_status("Network worker unavailable");
-    ESP_LOGI("forearm","Native chat ready; demo messages until Twitch authorization");
+    startup_animation_start(esp_timer_get_time()/1000);
+    startup_animation_set_status(network_started ? "Connecting to Twitch" : "Open settings to connect");
+    ESP_LOGI("forearm","Native chat ready");
     for (;;) {
         usb_poll(); network_events(); fixture_tick(); update_touch_check();
+        startup_animation_tick(esp_timer_get_time()/1000);
         const uint32_t before_frames=board_render_count();
         const int64_t frame_start=esp_timer_get_time();
         app_ui_tick(); auto wait_ms=std::clamp(lv_timer_handler(),uint32_t(1),uint32_t(8));

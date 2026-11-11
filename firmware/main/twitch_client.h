@@ -3,6 +3,7 @@
 #include <cstdint>
 #include "forearm/moderation.h"
 #include "forearm/device_login.h"
+#include "forearm/media.h"
 
 // These messages contain displayable state only. Passwords and OAuth tokens are
 // intentionally absent. The network task never calls LVGL.
@@ -10,12 +11,7 @@ enum class TwitchEventKind : std::uint8_t {
     Status, Login, Authenticated, Chat, DeleteMessage, ClearUser, ClearChannel, Gap, ModerationResult
 };
 
-struct TwitchEmote {
-    char id[65]{};
-    char text[65]{};
-    std::uint16_t byte_offset = 0, byte_length = 0;
-    bool position_valid = false;
-};
+using TwitchEmote = forearm::MediaOccurrence;
 
 struct TwitchEvent {
     TwitchEventKind kind = TwitchEventKind::Status;
@@ -64,6 +60,7 @@ struct TwitchStatus {
     bool moderation_ban_granted = false;
     bool moderation_role_verified = false;
     char channel[33]{};
+    char broadcaster_id[33]{}; // Exact resolved destination, never a token.
     char login[33]{};
     char state[96]{};
 };

@@ -212,7 +212,7 @@ int main() {
     app_ui_tick(); app_ui_pause(); app_ui_go_live();
     forearm_ui_test_fail_allocation_at = 0;
     app_ui_init();
-    assert(app_ui_stats().retained == 12); // Retry constructs the UI exactly once.
+    assert(app_ui_stats().retained == 0 && !app_ui_stats().demo); // Retry opens a clean chat, without demo text.
     std::puts("PSRAM layout initialization passed: second-allocation failure frees history, exposes no partial UI, rejects use, and clean retry initializes defaults.");
     app_ui_set_author_cache(false); // Keep the original64 body-culling cases isolated.
     assert(app_ui_stats().backdrop_culling_enabled);
@@ -415,5 +415,12 @@ int main() {
     author_equivalent("author LRU scroll and eviction", true);
     app_ui_set_font_fallback(forearm_fallback_font()); pump(64);
     author_equivalent("font generation invalidation", true);
+    for (const unsigned percent : {67U,75U,80U,90U,100U,115U,125U,133U,150U}) {
+        app_ui_set_ui_scale(percent); pump(64);
+        fresh_authors({"viewer_name_", u8"ЖΩ💜"});
+        author_equivalent("scaled author native glyphs and backdrop", true);
+        author_equivalent("scaled partial glyph clip", true, {8,12,245,72});
+    }
+    app_ui_set_ui_scale(100); pump(64);
     std::printf("Native LVGL author cache: %u native-label poisoned-frame comparisons pixel-identical; ASCII25/Unicode100B/clips/pressed/mask/layers/OOM/LRU; no cache allocation/free during DRAW.\n", author_comparisons);
 }

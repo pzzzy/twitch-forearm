@@ -37,22 +37,40 @@
     "glyph_codepoints": 1380,
     "output_sha256": "9669cbcdee4680bab19562f391fa3134d200acefef0913f847cc6677e835d2d6",
     "common_emoji_missing_codepoints": {
-      "\ud83d\ude00": [],
-      "\ud83d\ude02": [],
-      "\ud83d\ude2d": [],
-      "\ud83d\udd25": [],
-      "\ud83d\udc9c": [],
-      "\ud83d\udc4d": [],
-      "\u2728": [],
-      "\ud83c\udf0d": [],
-      "\ud83c\udf89": [],
-      "\ud83e\udd14": [],
-      "\ud83e\udd79": [],
-      "\u2764\ufe0f": [],
-      "\ud83d\ude80": [],
-      "\ud83e\udd84": []
+      "😀": [],
+      "😂": [],
+      "😭": [],
+      "🔥": [],
+      "💜": [],
+      "👍": [],
+      "✨": [],
+      "🌍": [],
+      "🎉": [],
+      "🤔": [],
+      "🥹": [],
+      "❤️": [],
+      "🚀": [],
+      "🦄": []
     },
     "converter_output_sha256": "9b65c4da95e19addb28c9f25bd20b31f7e11a4a834c9737dce6cf91055f6a562",
     "license_header": "tools/emoji-license-header.txt"
-  }
+  },
+  "compiled_size_variants": [
+    {
+      "pixels": 16,
+      "file": "forearm_emoji_16.c",
+      "sha256": "577c1092bcf6fbac067614f976213173075839e3f0d6ae3d3925b55d3e13b7b7"
+    },
+    {
+      "pixels": 20,
+      "file": "forearm_emoji_20.c",
+      "sha256": "e236f5da69029682bfdda6d5fdff890fd8eac5ccb5a6c17c0dcef2a4d8894011"
+    },
+    {
+      "pixels": 24,
+      "file": "forearm_emoji_24.c",
+      "sha256": "9669cbcdee4680bab19562f391fa3134d200acefef0913f847cc6677e835d2d6"
+    }
+  ],
+  "compiled_size_note": "Native uncompressed4bpp bitmaps. Text16/18/20/22/24/28/30/32/36; monochrome fallback16 for smallest sizes,20 for compact sizes,24 for default and large. Default24 source unchanged; runtime color images scale independently."
 }

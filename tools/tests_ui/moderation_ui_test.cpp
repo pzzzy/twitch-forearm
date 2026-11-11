@@ -64,7 +64,9 @@ static lv_point_t center(lv_obj_t *obj) {
     return {static_cast<lv_coord_t>((area.x1 + area.x2) / 2), static_cast<lv_coord_t>((area.y1 + area.y2) / 2)};
 }
 static void tap_button(const char *caption) {
-    const auto p = center(button_named(caption));
+    auto *obj = button_named(caption);
+    lv_obj_scroll_to_view(obj, LV_ANIM_OFF); pump(32);
+    const auto p = center(obj);
     tap(p.x, p.y);
 }
 static void back_to_chat() {
@@ -537,6 +539,7 @@ int main() {
     assert(find_label(lv_scr_act(), "READ ONLY") && !find_label(lv_scr_act(), "Enable moderation"));
     app_ui_set_read_only(false); pump(500);
     assert(find_label(lv_scr_act(), "Enable moderation"));
+    lv_obj_scroll_to_view(button_named("Enable moderation"), LV_ANIM_OFF); pump(32);
     auto upgrade_point = center(button_named("Enable moderation"));
     touch(upgrade_point.x, upgrade_point.y, LV_INDEV_STATE_PR);
     app_ui_set_read_only(true); pump(500);

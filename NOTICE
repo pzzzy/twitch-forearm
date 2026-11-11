@@ -23,4 +23,8 @@ LICENSES/esp-idf-5.3.6/ca-source/. GCC runtime code retains its Runtime Library
 Exception and LLVM headers retain their LLVM exception.
 
 Twitch, its emotes, and user chat content are not licensed by this project.
+7TV emotes remain their creators' content. Runtime Twemoji 17.0.2 artwork,
+by Twitter, Inc. and other contributors, is licensed under CC BY 4.0.
+The display resizes/converts this artwork; see THIRD_PARTY_NOTICES.md,
+LICENSES/Twemoji-17.0.2-CC-BY-4.0.txt and docs/media-provenance.json.
 This project is independent and is not endorsed by Twitch or the board vendor.

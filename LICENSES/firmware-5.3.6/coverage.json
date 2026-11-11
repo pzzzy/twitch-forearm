@@ -131,7 +131,7 @@
     },
     {
       "path": "LICENSES/firmware-5.3.6/linked-source-notices.txt",
-      "sha256": "644dae66107294762dc3e1ad418fb8aadcc2042ba31ab66a4d2c5cd0e1c97ba8"
+      "sha256": "9488c74842b0b1b53dadaee7ecd95ea2ba0eaa6d0e846baff46476acf863c8d7"
     }
   ],
   "inputs": {
@@ -183,6 +183,24 @@
       ],
       "basis": "Generated public Mozilla CA data and Espressif supplement; exact sources supplied"
     },
+    "project/core/include/forearm/catalog_json.h": {
+      "sha256": "2bec2c09384f387663815ee4bc7378ec601ef8f4f2e59e349f5cc9518fcdeaba",
+      "license": "Apache-2.0",
+      "license_files": [
+        "LICENSES/Apache-2.0.txt",
+        "LICENSES/firmware-5.3.6/linked-source-notices.txt"
+      ],
+      "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
+    },
+    "project/core/include/forearm/catalog_store.h": {
+      "sha256": "104ef64860114cfe32fb7af49acb29ecac8114736dca387cf9e9da0f4af824b7",
+      "license": "Apache-2.0",
+      "license_files": [
+        "LICENSES/Apache-2.0.txt",
+        "LICENSES/firmware-5.3.6/linked-source-notices.txt"
+      ],
+      "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
+    },
     "project/core/include/forearm/chat_store.h": {
       "sha256": "a74e8476dda836f1e9543296050c7f8b07ab526d2e9cd28d588daaff99f3a1d9",
       "license": "Apache-2.0",
@@ -210,6 +228,15 @@
       ],
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
+    "project/core/include/forearm/emoji_sequence.h": {
+      "sha256": "c90b40d3cc1c0b62dae1656229bcde2232285fc5b97ab68b2d8147166f445c75",
+      "license": "Apache-2.0",
+      "license_files": [
+        "LICENSES/Apache-2.0.txt",
+        "LICENSES/firmware-5.3.6/linked-source-notices.txt"
+      ],
+      "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
+    },
     "project/core/include/forearm/emote_fragments.h": {
       "sha256": "e6bb9585bef7cbf54323bf1009cb70450195ec768163222b1a40e122e4c683d0",
       "license": "Apache-2.0",
@@ -228,6 +255,24 @@
       ],
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
+    "project/core/include/forearm/media.h": {
+      "sha256": "b0ed63edfb9ac045f2ade701a6a29d48db14ef61d8da3acb0f33b0376f96224a",
+      "license": "Apache-2.0",
+      "license_files": [
+        "LICENSES/Apache-2.0.txt",
+        "LICENSES/firmware-5.3.6/linked-source-notices.txt"
+      ],
+      "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
+    },
+    "project/core/include/forearm/media_enrich.h": {
+      "sha256": "9116570076ce6d380764b5e24d83340c74948f51572a2cdb444fcdb7a124ed90",
+      "license": "Apache-2.0",
+      "license_files": [
+        "LICENSES/Apache-2.0.txt",
+        "LICENSES/firmware-5.3.6/linked-source-notices.txt"
+      ],
+      "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
+    },
     "project/core/include/forearm/moderation.h": {
       "sha256": "0c6185d27ea5bd2b3645532471739ff9aecd6f472763c76100d91e0514ea2561",
       "license": "Apache-2.0",
@@ -236,6 +281,46 @@
         "LICENSES/firmware-5.3.6/linked-source-notices.txt"
       ],
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
+    },
+    "project/core/include/forearm/seventv_catalog.h": {
+      "sha256": "e64ef5e40bb0d68aa36b6b4edadd70add6f2363203cac9859ab16dbb3eeb1dc5",
+      "license": "Apache-2.0",
+      "license_files": [
+        "LICENSES/Apache-2.0.txt",
+        "LICENSES/firmware-5.3.6/linked-source-notices.txt"
+      ],
+      "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
+    },
+    "project/core/include/forearm/twemoji_keys.h": {
+      "sha256": "ba69a9e8b4d58f86879aec242eb4a20942e69659c4d845d521821a7abe78cc53",
+      "license": "Apache-2.0",
+      "license_files": [
+        "LICENSES/Apache-2.0.txt",
+        "LICENSES/firmware-5.3.6/linked-source-notices.txt"
+      ],
+      "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
+    },
+    "project/firmware/components/forearm_fonts/forearm_emoji_16.c": {
+      "sha256": "577c1092bcf6fbac067614f976213173075839e3f0d6ae3d3925b55d3e13b7b7",
+      "license": "OFL-1.1",
+      "license_files": [
+        "LICENSES/Montserrat-2024-OFL-1.1.txt",
+        "LICENSES/NotoEmoji-OFL-1.1.txt",
+        "LICENSES/NotoSans-OFL-1.1.txt",
+        "LICENSES/firmware-5.3.6/linked-source-notices.txt"
+      ],
+      "basis": "Explicit SPDX; select Apache alternative for Mbed TLS"
+    },
+    "project/firmware/components/forearm_fonts/forearm_emoji_20.c": {
+      "sha256": "e236f5da69029682bfdda6d5fdff890fd8eac5ccb5a6c17c0dcef2a4d8894011",
+      "license": "OFL-1.1",
+      "license_files": [
+        "LICENSES/Montserrat-2024-OFL-1.1.txt",
+        "LICENSES/NotoEmoji-OFL-1.1.txt",
+        "LICENSES/NotoSans-OFL-1.1.txt",
+        "LICENSES/firmware-5.3.6/linked-source-notices.txt"
+      ],
+      "basis": "Explicit SPDX; select Apache alternative for Mbed TLS"
     },
     "project/firmware/components/forearm_fonts/forearm_emoji_24.c": {
       "sha256": "9669cbcdee4680bab19562f391fa3134d200acefef0913f847cc6677e835d2d6",
@@ -249,13 +334,57 @@
       "basis": "Explicit SPDX; select Apache alternative for Mbed TLS"
     },
     "project/firmware/components/forearm_fonts/forearm_fonts.c": {
-      "sha256": "909381868c43014ab1d9425e2e76278a43ed8f2448abd0d2e3f6e0987ad05ce3",
+      "sha256": "fcc0b0a6fc15caa9f5680ff043dfdf47c6c06279d30f22249c94d4d0c102503a",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
         "LICENSES/firmware-5.3.6/linked-source-notices.txt"
       ],
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
+    },
+    "project/firmware/components/forearm_fonts/forearm_text_16.c": {
+      "sha256": "425c50ed3a78bf39193053d3641b01fee10400d586140a68ef7446332f4cf20f",
+      "license": "OFL-1.1",
+      "license_files": [
+        "LICENSES/Montserrat-2024-OFL-1.1.txt",
+        "LICENSES/NotoEmoji-OFL-1.1.txt",
+        "LICENSES/NotoSans-OFL-1.1.txt",
+        "LICENSES/firmware-5.3.6/linked-source-notices.txt"
+      ],
+      "basis": "Explicit SPDX; select Apache alternative for Mbed TLS"
+    },
+    "project/firmware/components/forearm_fonts/forearm_text_18.c": {
+      "sha256": "9681081aa0ad190ef5b8366b42ab663054589d337572725dd3a4ddd19f49fb04",
+      "license": "OFL-1.1",
+      "license_files": [
+        "LICENSES/Montserrat-2024-OFL-1.1.txt",
+        "LICENSES/NotoEmoji-OFL-1.1.txt",
+        "LICENSES/NotoSans-OFL-1.1.txt",
+        "LICENSES/firmware-5.3.6/linked-source-notices.txt"
+      ],
+      "basis": "Explicit SPDX; select Apache alternative for Mbed TLS"
+    },
+    "project/firmware/components/forearm_fonts/forearm_text_20.c": {
+      "sha256": "b1b2d58a49e5df5fb26f7f2ca5e332ef851214b189ddbfb5e8cc768df40bfd59",
+      "license": "OFL-1.1",
+      "license_files": [
+        "LICENSES/Montserrat-2024-OFL-1.1.txt",
+        "LICENSES/NotoEmoji-OFL-1.1.txt",
+        "LICENSES/NotoSans-OFL-1.1.txt",
+        "LICENSES/firmware-5.3.6/linked-source-notices.txt"
+      ],
+      "basis": "Explicit SPDX; select Apache alternative for Mbed TLS"
+    },
+    "project/firmware/components/forearm_fonts/forearm_text_22.c": {
+      "sha256": "c9e707c853f1e9e4a2d929799e2317a09b867c6ad697471eb7a4a0edfe275a8e",
+      "license": "OFL-1.1",
+      "license_files": [
+        "LICENSES/Montserrat-2024-OFL-1.1.txt",
+        "LICENSES/NotoEmoji-OFL-1.1.txt",
+        "LICENSES/NotoSans-OFL-1.1.txt",
+        "LICENSES/firmware-5.3.6/linked-source-notices.txt"
+      ],
+      "basis": "Explicit SPDX; select Apache alternative for Mbed TLS"
     },
     "project/firmware/components/forearm_fonts/forearm_text_24.c": {
       "sha256": "3104c83bfda2e0ca2bf9842d7f7908be7f7f16a0235b5d5e6444d3345447d080",
@@ -268,8 +397,52 @@
       ],
       "basis": "Explicit SPDX; select Apache alternative for Mbed TLS"
     },
+    "project/firmware/components/forearm_fonts/forearm_text_28.c": {
+      "sha256": "74f7dc9e60917baa3b92c4190d7842bc3da1f2440f4bc3a8cc521e2eb27c981d",
+      "license": "OFL-1.1",
+      "license_files": [
+        "LICENSES/Montserrat-2024-OFL-1.1.txt",
+        "LICENSES/NotoEmoji-OFL-1.1.txt",
+        "LICENSES/NotoSans-OFL-1.1.txt",
+        "LICENSES/firmware-5.3.6/linked-source-notices.txt"
+      ],
+      "basis": "Explicit SPDX; select Apache alternative for Mbed TLS"
+    },
+    "project/firmware/components/forearm_fonts/forearm_text_30.c": {
+      "sha256": "f8449e481595bd522fcf73baad05e3c0da59d565ed8e9f45174986909530deb3",
+      "license": "OFL-1.1",
+      "license_files": [
+        "LICENSES/Montserrat-2024-OFL-1.1.txt",
+        "LICENSES/NotoEmoji-OFL-1.1.txt",
+        "LICENSES/NotoSans-OFL-1.1.txt",
+        "LICENSES/firmware-5.3.6/linked-source-notices.txt"
+      ],
+      "basis": "Explicit SPDX; select Apache alternative for Mbed TLS"
+    },
+    "project/firmware/components/forearm_fonts/forearm_text_32.c": {
+      "sha256": "c5d3b5d09516a4b564ef9c0aa134cc7e47b85fcbf72e588e9f38833969e85732",
+      "license": "OFL-1.1",
+      "license_files": [
+        "LICENSES/Montserrat-2024-OFL-1.1.txt",
+        "LICENSES/NotoEmoji-OFL-1.1.txt",
+        "LICENSES/NotoSans-OFL-1.1.txt",
+        "LICENSES/firmware-5.3.6/linked-source-notices.txt"
+      ],
+      "basis": "Explicit SPDX; select Apache alternative for Mbed TLS"
+    },
+    "project/firmware/components/forearm_fonts/forearm_text_36.c": {
+      "sha256": "b431838c1d849b6d8c5ff3ee314e61e9ca9b093ad5677d19f024419e67e7aacf",
+      "license": "OFL-1.1",
+      "license_files": [
+        "LICENSES/Montserrat-2024-OFL-1.1.txt",
+        "LICENSES/NotoEmoji-OFL-1.1.txt",
+        "LICENSES/NotoSans-OFL-1.1.txt",
+        "LICENSES/firmware-5.3.6/linked-source-notices.txt"
+      ],
+      "basis": "Explicit SPDX; select Apache alternative for Mbed TLS"
+    },
     "project/firmware/components/forearm_fonts/include/forearm_fonts.h": {
-      "sha256": "6261b2ae218417553b353683b2cc8c4d5348c6a440c1287a5d775e68a6654aa4",
+      "sha256": "06ccda4bd2d9e2d70f344f31aa77ffe7c1bbfe3218bb9d96f1cccbb22d4401ff",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -350,7 +523,7 @@
       "basis": "Explicit SPDX; select Apache alternative for Mbed TLS"
     },
     "project/firmware/main/app_ui.cpp": {
-      "sha256": "6f49ddd28899cc73ed8f8a8e8e84a7f059bc4c2b430bc4de4264ed82fc45fdce",
+      "sha256": "65bc9e94bc798dde01b5923b7997b5874e8239fcdf14795a7d59750995b1a3de",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -359,7 +532,7 @@
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
     "project/firmware/main/app_ui.h": {
-      "sha256": "5b40ca3724500cd7a8f96e3826698597ba67198b5abae295920831d3c1d745d0",
+      "sha256": "df45ca66dd490f3369631cf4c211e548338414028c6a22bc7e831fb317d1c29f",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -386,7 +559,7 @@
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
     "project/firmware/main/emote_cache.cpp": {
-      "sha256": "13323dfd3cd75cfec5f943fd22ba3dd50a847d7a558653cfd68607231a8df67a",
+      "sha256": "1fd6797026043d23c9520a51443da7af5cbb952cdeb467f6a0f2111d38f2af15",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -395,7 +568,7 @@
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
     "project/firmware/main/emote_cache.h": {
-      "sha256": "e917e83aab6bdaef426fc1a852ae5e7ab89aab7ce8aaed8d103e38b310ef56d8",
+      "sha256": "22addd72e956d29e40b59d12268dd14289e92df65f2a7baeb6c1e0f0a82d8adf",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -404,7 +577,7 @@
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
     "project/firmware/main/lv_conf.h": {
-      "sha256": "7ef11007eb3da01ab70418a4c131e1d7770f907ae568c575b953885254777e20",
+      "sha256": "7dfa2ce4e3c6cd1d4bee469cac592b47284debdd59a8dfb597333a993bc4be19",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -413,7 +586,25 @@
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
     "project/firmware/main/main.cpp": {
-      "sha256": "b2c15d899816fe834784cc15b7f9096af29db6f5407ba33b9f2ee1ea607dda40",
+      "sha256": "f790f3e839e98ae666d4add25f88a7addadfcf3cddb5c4ec5cce68ab571a3fea",
+      "license": "Apache-2.0",
+      "license_files": [
+        "LICENSES/Apache-2.0.txt",
+        "LICENSES/firmware-5.3.6/linked-source-notices.txt"
+      ],
+      "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
+    },
+    "project/firmware/main/startup_animation.cpp": {
+      "sha256": "7febb3269fd5df04da2cd9cf0e996ccdec38b76c1e8cc72697bbf2fca878da0d",
+      "license": "Apache-2.0",
+      "license_files": [
+        "LICENSES/Apache-2.0.txt",
+        "LICENSES/firmware-5.3.6/linked-source-notices.txt"
+      ],
+      "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
+    },
+    "project/firmware/main/startup_animation.h": {
+      "sha256": "9ac5740aa914ba75c5cf69af389560da9336124b0825ac0b0e8a7062cce809cf",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -422,7 +613,7 @@
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
     "project/firmware/main/twitch_client.cpp": {
-      "sha256": "5847f984ca2e01b8f429578caf731e16644700a0d5101759fcbf958de19f4f7e",
+      "sha256": "31878cdb51dc92b9647d085d7c148a39d1852a4613049739b465a0bcde923736",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -431,7 +622,7 @@
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
     "project/firmware/main/twitch_client.h": {
-      "sha256": "2c43703542d49f7414b16bffee5acdc4af81c03d21c222cf60010d1e7f0c2044",
+      "sha256": "6051ecfa36b9199262bcbce333c798bdab770a63269ad80fc9580ef4f1008bcd",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -1882,8 +2073,32 @@
       ],
       "basis": "Pinned legacy Montserrat/FontAwesome bitmap inputs plus LVGL glue"
     },
+    "project/firmware/managed_components/lvgl__lvgl/src/font/lv_font_montserrat_18.c": {
+      "sha256": "9d3f2f786b0a94e480398dbee3b32b4efd0c27876a1765cc591020f88face180",
+      "license": "OFL-1.1 AND MIT",
+      "license_files": [
+        "LICENSES/FontAwesome-5.9.0-OFL-1.1.txt",
+        "LICENSES/FontAwesome-5.9.0-license.txt",
+        "LICENSES/LVGL-8.4.0-MIT.txt",
+        "LICENSES/Montserrat-7.200-OFL-1.1.txt",
+        "LICENSES/firmware-5.3.6/linked-source-notices.txt"
+      ],
+      "basis": "Pinned legacy Montserrat/FontAwesome bitmap inputs plus LVGL glue"
+    },
     "project/firmware/managed_components/lvgl__lvgl/src/font/lv_font_montserrat_20.c": {
       "sha256": "a011c592674f82dd40664d2ddcc790f030af941a66cfee2f7020f56ddeb3596a",
+      "license": "OFL-1.1 AND MIT",
+      "license_files": [
+        "LICENSES/FontAwesome-5.9.0-OFL-1.1.txt",
+        "LICENSES/FontAwesome-5.9.0-license.txt",
+        "LICENSES/LVGL-8.4.0-MIT.txt",
+        "LICENSES/Montserrat-7.200-OFL-1.1.txt",
+        "LICENSES/firmware-5.3.6/linked-source-notices.txt"
+      ],
+      "basis": "Pinned legacy Montserrat/FontAwesome bitmap inputs plus LVGL glue"
+    },
+    "project/firmware/managed_components/lvgl__lvgl/src/font/lv_font_montserrat_22.c": {
+      "sha256": "1c69e0df6fb0db1626df9cf3cd44b3f2a355aa1eb5f07447e9684c9a1d496cc0",
       "license": "OFL-1.1 AND MIT",
       "license_files": [
         "LICENSES/FontAwesome-5.9.0-OFL-1.1.txt",
@@ -1908,6 +2123,42 @@
     },
     "project/firmware/managed_components/lvgl__lvgl/src/font/lv_font_montserrat_28.c": {
       "sha256": "1f34b9cf8457385240dea714d5744aa32722878af7f106bb1c6f556ef64a6307",
+      "license": "OFL-1.1 AND MIT",
+      "license_files": [
+        "LICENSES/FontAwesome-5.9.0-OFL-1.1.txt",
+        "LICENSES/FontAwesome-5.9.0-license.txt",
+        "LICENSES/LVGL-8.4.0-MIT.txt",
+        "LICENSES/Montserrat-7.200-OFL-1.1.txt",
+        "LICENSES/firmware-5.3.6/linked-source-notices.txt"
+      ],
+      "basis": "Pinned legacy Montserrat/FontAwesome bitmap inputs plus LVGL glue"
+    },
+    "project/firmware/managed_components/lvgl__lvgl/src/font/lv_font_montserrat_30.c": {
+      "sha256": "8f2b0fdec0043b4a347e63754238a8c7af5d45ff69c9de7cce40561f3ff81676",
+      "license": "OFL-1.1 AND MIT",
+      "license_files": [
+        "LICENSES/FontAwesome-5.9.0-OFL-1.1.txt",
+        "LICENSES/FontAwesome-5.9.0-license.txt",
+        "LICENSES/LVGL-8.4.0-MIT.txt",
+        "LICENSES/Montserrat-7.200-OFL-1.1.txt",
+        "LICENSES/firmware-5.3.6/linked-source-notices.txt"
+      ],
+      "basis": "Pinned legacy Montserrat/FontAwesome bitmap inputs plus LVGL glue"
+    },
+    "project/firmware/managed_components/lvgl__lvgl/src/font/lv_font_montserrat_32.c": {
+      "sha256": "65cfd6f41946a99037ffdbde2c74ab2d0899000abadedfc87f00b517d8510633",
+      "license": "OFL-1.1 AND MIT",
+      "license_files": [
+        "LICENSES/FontAwesome-5.9.0-OFL-1.1.txt",
+        "LICENSES/FontAwesome-5.9.0-license.txt",
+        "LICENSES/LVGL-8.4.0-MIT.txt",
+        "LICENSES/Montserrat-7.200-OFL-1.1.txt",
+        "LICENSES/firmware-5.3.6/linked-source-notices.txt"
+      ],
+      "basis": "Pinned legacy Montserrat/FontAwesome bitmap inputs plus LVGL glue"
+    },
+    "project/firmware/managed_components/lvgl__lvgl/src/font/lv_font_montserrat_36.c": {
+      "sha256": "302be926e2c00daa9c29c01cd615d0122b7d52d7ca2e64443e14d05bacf54db7",
       "license": "OFL-1.1 AND MIT",
       "license_files": [
         "LICENSES/FontAwesome-5.9.0-OFL-1.1.txt",
@@ -18813,6 +19064,7 @@
     "Five exact Linux-amd64 runtime/header hash variants reviewed against the official SDK-manifest-pinned toolchain package. Original macOS hashes remain primary; no directory, filename-prefix or arbitrary-package approval is used.",
     "Inline/read-only/touch-cadence review: three added original Apache-2.0 headers (device_config.h, emote_fragments.h and touch_sample_cadence.h); original core/UI/network/BSP/font-glue updates reviewed. Generated font tables/assets, generated configuration, all external SDK/toolchain sources and prebuilt hashes are unchanged. Exact Linux variants and their provenance are retained. No license/comment block or canonical full-text change; build freshness checks passed. This license review does not qualify hardware reliability or approve a release.",
     "Author-cache/drag-feedback review: only original Apache-2.0 app_ui.cpp/.h and main.cpp changed. The bounded author bitmap cache, native-glyph gutter and conservative backdrop guards, drag-state handling, and diagnostic bridge introduce no new third-party input. All 2001 input paths and every external SDK/toolchain/prebuilt/generated-configuration hash, canonical license evidence and 439 notice blocks are unchanged. Five exact reviewed Linux variants and provenance are retained. Build freshness checks passed; hardware performance and reliability require separate qualification.",
-    "Instruction-cache32/PSRAM-layout review: the only changed generated inputs are application and bootloader sdkconfig.h, each replacing the 16KiB instruction-cache selection/size with 32KiB; all other configuration bytes are unchanged. Original Apache-2.0 app_ui.cpp/.h and main.cpp add profiling and move the value-initialized bounded layout table to PSRAM; the ineffective body-alignment experiment was removed. All 2001 input paths, external SDK/toolchain source and prebuilt hashes, canonical license evidence and 439 notice blocks are unchanged. Five exact Linux variants, provenance and prior review notes are preserved. Build freshness checks passed; this catalog does not itself qualify device performance/reliability or approve a release."
+    "Instruction-cache32/PSRAM-layout review: the only changed generated inputs are application and bootloader sdkconfig.h, each replacing the 16KiB instruction-cache selection/size with 32KiB; all other configuration bytes are unchanged. Original Apache-2.0 app_ui.cpp/.h and main.cpp add profiling and move the value-initialized bounded layout table to PSRAM; the ineffective body-alignment experiment was removed. All 2001 input paths, external SDK/toolchain source and prebuilt hashes, canonical license evidence and 439 notice blocks are unchanged. Five exact Linux variants, provenance and prior review notes are preserved. Build freshness checks passed; this catalog does not itself qualify device performance/reliability or approve a release.",
+    "Reviewed0.5.0 development media/sizing/startup inputs:24new original/helper/font inputs,10changed originalinputs;10additional correctly-sized OFL generatedfontnoticeblocks. All prior Linux variants retained unchanged. Twemoji PNG filename metadata only; runtime artwork and its CC BY4.0 notice are separate from original code."
   ]
 }

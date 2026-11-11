@@ -62,5 +62,53 @@
     "host_compiled_bytes": 115404,
     "converter_output_sha256": "6b4a2eea50964e1fef08837389977a6239a20b3b2cd3f1ad011f15edf6fe10e0",
     "license_header": "tools/text-license-header.txt"
-  }
+  },
+  "compiled_size_variants": [
+    {
+      "pixels": 16,
+      "file": "forearm_text_16.c",
+      "sha256": "425c50ed3a78bf39193053d3641b01fee10400d586140a68ef7446332f4cf20f"
+    },
+    {
+      "pixels": 18,
+      "file": "forearm_text_18.c",
+      "sha256": "9681081aa0ad190ef5b8366b42ab663054589d337572725dd3a4ddd19f49fb04"
+    },
+    {
+      "pixels": 20,
+      "file": "forearm_text_20.c",
+      "sha256": "b1b2d58a49e5df5fb26f7f2ca5e332ef851214b189ddbfb5e8cc768df40bfd59"
+    },
+    {
+      "pixels": 22,
+      "file": "forearm_text_22.c",
+      "sha256": "c9e707c853f1e9e4a2d929799e2317a09b867c6ad697471eb7a4a0edfe275a8e"
+    },
+    {
+      "pixels": 24,
+      "file": "forearm_text_24.c",
+      "sha256": "3104c83bfda2e0ca2bf9842d7f7908be7f7f16a0235b5d5e6444d3345447d080"
+    },
+    {
+      "pixels": 28,
+      "file": "forearm_text_28.c",
+      "sha256": "74f7dc9e60917baa3b92c4190d7842bc3da1f2440f4bc3a8cc521e2eb27c981d"
+    },
+    {
+      "pixels": 30,
+      "file": "forearm_text_30.c",
+      "sha256": "f8449e481595bd522fcf73baad05e3c0da59d565ed8e9f45174986909530deb3"
+    },
+    {
+      "pixels": 32,
+      "file": "forearm_text_32.c",
+      "sha256": "c5d3b5d09516a4b564ef9c0aa134cc7e47b85fcbf72e588e9f38833969e85732"
+    },
+    {
+      "pixels": 36,
+      "file": "forearm_text_36.c",
+      "sha256": "b431838c1d849b6d8c5ff3ee314e61e9ca9b093ad5677d19f024419e67e7aacf"
+    }
+  ],
+  "compiled_size_note": "Native uncompressed4bpp bitmaps. Text16/18/20/22/24/28/30/32/36; monochrome fallback16 for smallest sizes,20 for compact sizes,24 for default and large. Default24 source unchanged; runtime color images scale independently."
 }

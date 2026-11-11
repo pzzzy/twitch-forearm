@@ -110,6 +110,11 @@
       "file": "LICENSES/esp-idf-5.3.5/PHY-Apache-2.0.txt",
       "source": "ESP-IDF v5.3.5/components/esp_phy/lib/LICENSE",
       "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "file": "LICENSES/Twemoji-17.0.2-CC-BY-4.0.txt",
+      "source": "https://raw.githubusercontent.com/jdecked/twemoji/388f518b756404152f128a3539f5e7f9a6f1ebd6/LICENSE-GRAPHICS",
+      "sha256": "8ae9438818c26e4873b91d8c6ad620526c011e27e125677f13031eda903f007c"
     }
   ]
 }
