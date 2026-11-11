@@ -37,8 +37,8 @@ Greek U+0370–U+03FF. Montserrat does not contain the required Greek alphabet, 
 the Greek subset has its own source. The original fonts, separate OFL licenses
 and verified Git blob/SHA-256 hashes are in `assets/extended-text-provenance.json`.
 
-Montserrat's variable-font default is weight **100**. Before conversion,
-FontTools **4.60.1** explicitly instantiates weight **400** so accented letters
+Montserrat's variable-font default is weight **100**. The committed bitmaps were
+generated using FontTools **4.60.1**, which explicitly instantiated weight **400** so accented letters
 match the regular-weight ASCII body text. Noto Sans is instantiated at weight
 400 and width 100. The generated font retains its natural metrics in the C file;
 the runtime wrapper aligns its metadata to the selected primary font (27/5 at 24 px).
@@ -65,9 +65,21 @@ Regenerate after checking the input hashes:
 ```sh
 cd tools
 npm ci --ignore-scripts --no-audit --no-fund
+python3 -m venv .font-venv
+.font-venv/bin/python -m pip install --upgrade -r font-requirements.txt
 sh generate.sh
 sh generate-text.sh
 ```
+
+The current regeneration environment requires **FontTools 4.60.2**, which fixes
+[CVE-2025-66034](https://github.com/fonttools/fonttools/security/advisories/GHSA-768j-98cg-p3fv).
+Update existing `.font-venv` environments with the command above. This tool-only
+update does not regenerate or reattribute the committed bitmaps: their 4.60.1
+conversion records and generated license headers remain historical facts. The
+header template identifies 4.60.2 for future conversions. Regeneration with this
+version can change output; review the generated C and update its conversion
+provenance before distributing newly converted fonts. Ordinary firmware builds
+use the committed tables and do not run FontTools.
 
 `sh tools/check-font.sh` compiles the real LVGL 8.4 font lookup implementation
 with this component on the host. It checks 500 emoji lookups, real bitmap

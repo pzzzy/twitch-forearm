@@ -97,10 +97,12 @@ actual file headers take precedence over summaries.
 ## Host and font-generation tools
 
 Host requirements (`pyserial` 3.5, Pillow 13.0.0), Node.js, ESP-IDF's toolchain,
-`lv_font_conv` 1.5.3 and FontTools 4.60.1 are build/development dependencies,
+`lv_font_conv` 1.5.3 and FontTools 4.60.2 are build/development dependencies,
 not vendored runtimes. Font-generation versions and integrity are pinned in
 `firmware/components/forearm_fonts/tools/`; the directory retains the converter
 and FontTools MIT notices. These tools do not change the fonts' OFL license.
+Committed bitmap provenance records the historical FontTools 4.60.1 conversion;
+the patched 4.60.2 pin applies to future regeneration.
 
 Do not bundle ignored `node_modules/`, Python environments or SDK/toolchain
 installations under this inventory alone. A tool bundle requires its complete
