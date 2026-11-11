@@ -241,6 +241,82 @@ class ReleaseBundleTests(unittest.TestCase):
         (self.fixture.source / 'unreviewed.txt').write_text('Unreviewed file')
         self.reject_package()
 
+    def test_ignored_untracked_license_sidecars_cannot_change_package_bytes(self):
+        (self.fixture.source / '.gitignore').write_text(
+            '.DS_Store\n.hidden-host\nLICENSES/untracked-license.txt\n__MACOSX/\n')
+        self.fixture.commit()
+        self.fixture.write_app()
+        self.fixture.refresh_audit_hashes()
+        clean = self.fixture.package('without-sidecars')
+        for name in ['LICENSES/.DS_Store', 'LICENSES/.hidden-host',
+                     'LICENSES/nested/.DS_Store', 'LICENSES/__MACOSX/metadata',
+                     'LICENSES/untracked-license.txt']:
+            path = self.fixture.source / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('Synthetic ignored host material.\n')
+        self.assertEqual(self.fixture.git('status', '--porcelain', '--untracked-files=all'), '')
+        with_sidecars = self.fixture.package('with-sidecars')
+        self.assertEqual(clean.read_bytes(), with_sidecars.read_bytes())
+        with zipfile.ZipFile(with_sidecars) as archive:
+            self.assertEqual({name for name in archive.namelist() if name.startswith('LICENSES/')},
+                             {'LICENSES/example.txt'})
+        release_bundle.verify_bundle(with_sidecars)
+
+    def test_required_license_cannot_be_satisfied_by_an_ignored_untracked_file(self):
+        name = 'LICENSES/untracked-license.txt'
+        (self.fixture.source / '.gitignore').write_text(name + '\n')
+        self.fixture.commit()
+        self.fixture.write_app()
+        self.fixture.refresh_audit_hashes()
+        (self.fixture.source / name).write_text('Synthetic unreviewed license.\n')
+        self.fixture.audit['license_files'].append(name)
+        self.fixture.save_audit()
+        with self.assertRaisesRegex(ValueError, 'must be committed'):
+            self.fixture.package()
+
+    def test_tracked_nested_regular_license_names_are_preserved(self):
+        name = 'LICENSES/sdk-v1.2/COPYING extra+notice-2.txt'
+        path = self.fixture.source / name
+        path.parent.mkdir(parents=True)
+        payload = b'Synthetic nested license.\n'
+        path.write_bytes(payload)
+        self.fixture.commit()
+        self.fixture.write_app()
+        self.fixture.refresh_audit_hashes()
+        self.fixture.audit['license_files'].append(name)
+        self.fixture.save_audit()
+        package = self.fixture.package()
+        with zipfile.ZipFile(package) as archive:
+            self.assertEqual(archive.read(name), payload)
+        release_bundle.verify_bundle(package)
+
+    def test_rejects_missing_tracked_license_instead_of_silently_omitting_it(self):
+        # A skipped worktree entry can be absent with a clean status (as in a
+        # sparse checkout). Index enumeration must not silently omit it.
+        self.fixture.git('update-index', '--skip-worktree', 'LICENSES/example.txt')
+        (self.fixture.source / 'LICENSES/example.txt').unlink()
+        self.assertEqual(self.fixture.git('status', '--porcelain', '--untracked-files=all'), '')
+        with self.assertRaisesRegex(ValueError, 'Artifact is missing'):
+            self.fixture.package()
+
+    def test_rejects_committed_license_symlink_even_when_not_in_audit_list(self):
+        (self.fixture.source / 'LICENSES/extra-license.txt').symlink_to('example.txt')
+        self.fixture.commit()
+        self.fixture.write_app()
+        self.fixture.refresh_audit_hashes()
+        with self.assertRaisesRegex(ValueError, 'regular license files'):
+            self.fixture.package()
+
+    def test_rejects_host_metadata_even_if_force_committed(self):
+        name = 'LICENSES/.DS_Store'
+        (self.fixture.source / name).write_bytes(b'Synthetic host metadata')
+        self.fixture.git('add', '-f', name)
+        self.fixture.commit()
+        self.fixture.write_app()
+        self.fixture.refresh_audit_hashes()
+        with self.assertRaisesRegex(ValueError, 'host metadata'):
+            self.fixture.package()
+
     def test_rejects_foreign_build_tree(self):
         self.fixture.description['project_path'] = str(self.fixture.root / 'other/firmware')
         self.fixture.save_description()
@@ -327,6 +403,16 @@ class ReleaseBundleTests(unittest.TestCase):
 
     def test_rejects_extra_entry_even_with_valid_checksums(self):
         self.reject_modified(lambda entries: entries.__setitem__('private-token.txt', b'Synthetic secret'))
+
+    def test_rejects_license_host_metadata_and_hidden_parts_after_valid_rehash(self):
+        for name in ['LICENSES/.DS_Store', 'LICENSES/.hidden-host',
+                     'LICENSES/nested/.DS_Store', 'LICENSES/.cache/license.txt',
+                     'LICENSES/__MACOSX/notice.txt', 'LICENSES/Thumbs.db',
+                     'LICENSES/desktop.ini', 'LICENSES/._example.txt']:
+            with self.subTest(name=name):
+                path = self.rewrite(lambda entries: entries.__setitem__(name, b'Synthetic host metadata'))
+                with self.assertRaisesRegex(ValueError, 'host metadata'):
+                    release_bundle.verify_bundle(path)
 
     def test_rejects_nvs_entry_even_with_valid_checksums(self):
         self.reject_modified(lambda entries: entries.__setitem__('images/nvs.bin', b'Synthetic partition'))

@@ -14,10 +14,23 @@ IMAGES = {0x0: 'bootloader.bin', 0x8000: 'partition-table.bin',
           0xf000: 'ota_data_initial.bin', 0x30000: 'forearm_chat.bin'}
 VERSION = re.compile(r'\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?')
 HOST_PATH = re.compile(rb'/(?:Users|home)/[^/\s\x00]+/')
+HOST_METADATA_PARTS = {'__macosx', 'thumbs.db', 'desktop.ini'}
 
 
 def digest(data):
     return hashlib.sha256(data).hexdigest()
+
+
+def license_path(name):
+    """License payloads use normal source paths, never hidden/host sidecars."""
+    if not isinstance(name, str):
+        return False
+    path = PurePosixPath(name)
+    return (len(path.parts) > 1 and path.parts[0] == 'LICENSES' and
+            path.as_posix() == name and '\\' not in name and '..' not in path.parts and
+            all(not part.startswith('.') and part.casefold() not in HOST_METADATA_PARTS and
+                not any(ord(char) < 32 or ord(char) == 127 for char in part)
+                for part in path.parts[1:]))
 
 
 def contained(root, value):
@@ -80,6 +93,8 @@ def verify_bundle(path):
             p = PurePosixPath(name)
             if p.is_absolute() or '..' in p.parts or '\\' in name or p.as_posix() != name:
                 raise ValueError('Unsafe package path')
+            if name.startswith('LICENSES/') and not license_path(name):
+                raise ValueError('Hidden files or host metadata are not license payloads')
             mode = archive.getinfo(name).external_attr >> 16
             if mode & 0o170000 != 0o100000:
                 raise ValueError('Only regular package files are permitted')
@@ -174,17 +189,27 @@ def package(source, build, license_manifest, version, output):
     if (licenses['application_sha256'] != digest(images['forearm_chat.bin']) or
             licenses['bootloader_sha256'] != digest(images['bootloader.bin'])):
         raise ValueError('License audit does not cover these exact images')
+    # The clean index matches HEAD, but ignored host files can still exist on
+    # disk. Enumerate the reviewed index, never the working-directory tree.
+    tracked_licenses = {}
+    for record in git('ls-files', '--stage', '-z', '--', 'LICENSES/').split('\0'):
+        if not record:
+            continue
+        metadata, name = record.split('\t', 1)
+        mode, _object, stage = metadata.split()
+        if mode not in ('100644', '100755') or stage != '0':
+            raise ValueError('Only committed regular license files may be packaged')
+        if not license_path(name):
+            raise ValueError('Hidden files or host metadata are not license payloads')
+        tracked_licenses[name] = contained(source, name)
     for name in licenses['license_files']:
-        if not name.startswith('LICENSES/'):
-            raise ValueError('License path must stay inside LICENSES')
-        contained(source, name)
+        if not license_path(name) or name not in tracked_licenses:
+            raise ValueError('Required license file must be committed inside LICENSES')
     entries = {'images/' + name: data for name, data in images.items()}
     for name in ['LICENSE', 'NOTICE', 'THIRD_PARTY_NOTICES.md', 'firmware/dependencies.lock']:
         entries[name] = contained(source, name).read_bytes()
-    for path in sorted((source / 'LICENSES').rglob('*')):
-        if path.is_file():
-            name = path.relative_to(source).as_posix()
-            entries[name] = contained(source, name).read_bytes()
+    for name, path in sorted(tracked_licenses.items()):
+        entries[name] = path.read_bytes()
     entries['license-manifest.json'] = (json.dumps(licenses, indent=2, sort_keys=True) + '\n').encode()
     entries['README_FIRST.md'] = contained(source, 'docs/installing.md').read_bytes()
     manifest = {'schema_version': 1, 'version': version, 'release_tag': 'v' + version,
