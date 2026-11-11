@@ -36,7 +36,6 @@ bool ui_preferences_saved = true;
 
 void preview_startup() {
     startup_animation_start(esp_timer_get_time()/1000);
-    startup_animation_set_status("Your chat, within reach.");
 }
 
 void save_ui_scale(unsigned percent) {
@@ -558,7 +557,6 @@ void network_events() {
         switch(e.kind) {
             case TwitchEventKind::Status:
                 app_ui_set_network(e.text);
-                startup_animation_set_status(e.text);
                 if (!twitch_status().login_pending) app_ui_hide_login();
                 break;
             case TwitchEventKind::Login:
@@ -627,7 +625,6 @@ extern "C" void app_main() {
     emote_cache_init();
     if (!network_started) app_ui_set_status("Network worker unavailable");
     startup_animation_start(esp_timer_get_time()/1000);
-    startup_animation_set_status(network_started ? "Connecting to Twitch" : "Open settings to connect");
     ESP_LOGI("forearm","Native chat ready");
     for (;;) {
         usb_poll(); network_events(); fixture_tick(); update_touch_check();
