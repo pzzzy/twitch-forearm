@@ -1,8 +1,6 @@
 #include "startup_animation.h"
 
 #include <algorithm>
-#include <cstdio>
-#include <cstring>
 
 #include "lvgl.h"
 
@@ -10,8 +8,6 @@ namespace {
 constexpr std::uint32_t kInk = 0x08090C;
 constexpr std::uint32_t kViolet = 0xBE98F1;
 constexpr std::uint32_t kTeal = 0x73E6D2;
-constexpr std::uint32_t kWhite = 0xEEEAF5;
-constexpr std::uint32_t kMuted = 0x91889F;
 constexpr std::uint32_t kDuration = 2200;
 constexpr std::uint32_t kWipeStart = 2040;
 constexpr std::uint32_t kFrameInterval = 16;
@@ -23,7 +19,6 @@ struct State {
     int width = 320;
     int height = 480;
     bool dismiss = false;
-    char status[96] = "Starting up";
 } animation;
 
 lv_color_t color(std::uint32_t rgb) { return lv_color_hex(rgb); }
@@ -78,30 +73,12 @@ void line(lv_draw_ctx_t *ctx, int x1, int y1, int x2, int y2,
     const lv_point_t b{static_cast<lv_coord_t>(x2), static_cast<lv_coord_t>(y2)};
     lv_draw_line(ctx, &d, &a, &b);
 }
-void text(lv_draw_ctx_t *ctx, const char *value, const lv_font_t *font, int top,
-          std::uint32_t rgb, lv_opa_t opa, int spacing = 0) {
-    if (!opa || !value || !*value) return;
-    lv_draw_label_dsc_t d;
-    lv_draw_label_dsc_init(&d);
-    d.font = font; d.color = color(rgb); d.opa = opa;
-    d.align = LV_TEXT_ALIGN_CENTER; d.letter_space = spacing;
-    const lv_area_t area{20, static_cast<lv_coord_t>(top),
-        static_cast<lv_coord_t>(animation.width - 21),
-        static_cast<lv_coord_t>(top + font->line_height + 3)};
-    lv_area_t clip;
-    if (!_lv_area_intersect(&clip, ctx->clip_area, &area)) return;
-    const auto *old_clip = ctx->clip_area;
-    ctx->clip_area = &clip; // Status is one line even when a caller supplies long text.
-    lv_draw_label(ctx, &d, &area, value, nullptr);
-    ctx->clip_area = old_clip;
-}
-
 void draw(lv_event_t *event) {
     auto *ctx = lv_event_get_draw_ctx(event);
     if (!ctx) return;
     const auto t = animation.elapsed;
     const int cx = animation.width / 2;
-    const int cy = animation.height * 43 / 100;
+    const int cy = animation.height / 2;
     const int overall = 1024 - progress(t, 1880, 160);
     const int reveal = ease_out(progress(t, 40, 400));
     const int orbit = reveal * (1024 - progress(t, 1460, 390)) / 1024 * overall / 1024;
@@ -143,17 +120,6 @@ void draw(lv_event_t *event) {
         const int w = mix(4, 6, morph);
         rectangle(ctx, x, cy - h / 2, w, h, i == 2 ? kTeal : kViolet, opacity(alpha), 3);
     }
-    const int title = ease_out(progress(t, 900, 420));
-    const int subtitle = ease_out(progress(t, 1050, 420));
-    text(ctx, "FOREARM", &lv_font_montserrat_28, animation.height * 60 / 100 + mix(8, 0, title),
-         kWhite, opacity(title * overall / 1024), 3);
-    text(ctx, "CHAT", &lv_font_montserrat_28, animation.height * 68 / 100 + mix(8, 0, subtitle),
-         kViolet, opacity(subtitle * overall / 1024), 8);
-    text(ctx, "Your chat, within reach.", &lv_font_montserrat_16, animation.height * 77 / 100,
-         kMuted, opacity(subtitle * overall / 1024));
-    const int status_alpha = ease_out(progress(t, 1400, 350)) * overall / 1024;
-    text(ctx, animation.status, &lv_font_montserrat_16, animation.height * 87 / 100,
-         kMuted, opacity(status_alpha));
     const int track_width = std::min(112, animation.width - 48);
     const int left = (animation.width - track_width) / 2;
     const int top = animation.height * 94 / 100;
@@ -183,7 +149,6 @@ bool startup_animation_start(std::uint64_t now_ms) {
     animation.overlay = overlay;
     animation.started = now_ms; animation.elapsed = 0; animation.dismiss = false;
     animation.width = lv_disp_get_hor_res(nullptr); animation.height = lv_disp_get_ver_res(nullptr);
-    std::snprintf(animation.status, sizeof(animation.status), "%s", "Starting up");
     lv_obj_remove_style_all(overlay);
     lv_obj_set_pos(overlay, 0, 0);
     lv_obj_set_size(overlay, animation.width, animation.height);
@@ -197,12 +162,6 @@ bool startup_animation_start(std::uint64_t now_ms) {
     // hit area now so the very first contact cannot reach an underlying row.
     lv_obj_update_layout(overlay);
     return true;
-}
-void startup_animation_set_status(const char *value) {
-    const char *next = value && *value ? value : "Starting up";
-    if (std::strncmp(animation.status, next, sizeof(animation.status) - 1) == 0) return;
-    std::snprintf(animation.status, sizeof(animation.status), "%s", next);
-    if (animation.overlay) lv_obj_invalidate(animation.overlay);
 }
 void startup_animation_tick(std::uint64_t now_ms) {
     if (!animation.overlay) return;

@@ -87,7 +87,6 @@ int main(int argc, char **argv) {
     const std::string captures = argc > 1 ? argv[1] : "";
     unsigned captures_written = 0;
     for (unsigned age = 0; age < 2200; age += 8) {
-        if (age == 1400) startup_animation_set_status("Connecting to Wi-Fi");
         pump(1000 + age);
         if (age == 320 || age == 880 || age == 1248 || age == 1648 || age == 2000 || age == 2120) {
             lv_refr_now(display); capture(captures, age); ++captures_written;
@@ -128,7 +127,6 @@ int main(int argc, char **argv) {
     assert(lv_obj_get_child_cnt(lv_layer_top()) == top_children);
     assert(timers() == timer_count);
     assert(startup_animation_start(10000));
-    startup_animation_set_status(std::string(200, 'W').c_str());
     pump(11600); lv_refr_now(display);
     startup_animation_tick(12200);
     assert(!startup_animation_active());

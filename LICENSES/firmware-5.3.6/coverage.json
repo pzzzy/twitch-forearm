@@ -586,7 +586,7 @@
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
     "project/firmware/main/main.cpp": {
-      "sha256": "f790f3e839e98ae666d4add25f88a7addadfcf3cddb5c4ec5cce68ab571a3fea",
+      "sha256": "6be54135b136c83995a74f2ce00ba58e8cd1399655ecb27fd1da1e9c9c04b81e",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -595,7 +595,7 @@
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
     "project/firmware/main/startup_animation.cpp": {
-      "sha256": "7febb3269fd5df04da2cd9cf0e996ccdec38b76c1e8cc72697bbf2fca878da0d",
+      "sha256": "1d1dd9d3044090bb3234fd205ae972bc0058d659f8a064368d542c9a01c2dbba",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -604,7 +604,7 @@
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
     "project/firmware/main/startup_animation.h": {
-      "sha256": "9ac5740aa914ba75c5cf69af389560da9336124b0825ac0b0e8a7062cce809cf",
+      "sha256": "8b2f6d5895a5eaa52a49a3f546edbbe2fd29d253a0036379bc9028468b2eda50",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -19065,6 +19065,7 @@
     "Inline/read-only/touch-cadence review: three added original Apache-2.0 headers (device_config.h, emote_fragments.h and touch_sample_cadence.h); original core/UI/network/BSP/font-glue updates reviewed. Generated font tables/assets, generated configuration, all external SDK/toolchain sources and prebuilt hashes are unchanged. Exact Linux variants and their provenance are retained. No license/comment block or canonical full-text change; build freshness checks passed. This license review does not qualify hardware reliability or approve a release.",
     "Author-cache/drag-feedback review: only original Apache-2.0 app_ui.cpp/.h and main.cpp changed. The bounded author bitmap cache, native-glyph gutter and conservative backdrop guards, drag-state handling, and diagnostic bridge introduce no new third-party input. All 2001 input paths and every external SDK/toolchain/prebuilt/generated-configuration hash, canonical license evidence and 439 notice blocks are unchanged. Five exact reviewed Linux variants and provenance are retained. Build freshness checks passed; hardware performance and reliability require separate qualification.",
     "Instruction-cache32/PSRAM-layout review: the only changed generated inputs are application and bootloader sdkconfig.h, each replacing the 16KiB instruction-cache selection/size with 32KiB; all other configuration bytes are unchanged. Original Apache-2.0 app_ui.cpp/.h and main.cpp add profiling and move the value-initialized bounded layout table to PSRAM; the ineffective body-alignment experiment was removed. All 2001 input paths, external SDK/toolchain source and prebuilt hashes, canonical license evidence and 439 notice blocks are unchanged. Five exact Linux variants, provenance and prior review notes are preserved. Build freshness checks passed; this catalog does not itself qualify device performance/reliability or approve a release.",
-    "Reviewed0.5.0 development media/sizing/startup inputs:24new original/helper/font inputs,10changed originalinputs;10additional correctly-sized OFL generatedfontnoticeblocks. All prior Linux variants retained unchanged. Twemoji PNG filename metadata only; runtime artwork and its CC BY4.0 notice are separate from original code."
+    "Reviewed0.5.0 development media/sizing/startup inputs:24new original/helper/font inputs,10changed originalinputs;10additional correctly-sized OFL generatedfontnoticeblocks. All prior Linux variants retained unchanged. Twemoji PNG filename metadata only; runtime artwork and its CC BY4.0 notice are separate from original code.",
+    "Reviewed removal of all startup typography and its unused status API: only original Apache-2.0 startup/main sources changed; animation timing, touch ownership and dependencies are preserved. Existing source notices and reviewed platform variants are retained."
   ]
 }
