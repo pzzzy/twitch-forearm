@@ -1,6 +1,6 @@
 # Contributing
 
-Forearm Chat is a development preview for the JC3248W535 board family. Check the current [implementation plan](docs/implementation-plan.md) before starting a larger change. Keep fixes focused and describe the user-visible behavior and validation in the PR.
+Forearm Chat is hardware-beta software for the JC3248W535 board family. Check the [implementation plan](docs/implementation-plan.md) before starting a larger change. Keep fixes focused and describe the user-visible behavior and validation in the PR. A release's attached qualification summary identifies its tested commit, image hashes, workload and limits; historical results do not qualify a changed image.
 
 ## Local checks
 
@@ -22,15 +22,17 @@ python3 tools/tests_ui/run_host.py
 python3 tools/check_public_tree.py
 ```
 
-The font and composition checks use the pinned LVGL dependency resolved by the firmware build. An offline firmware build can be checked separately with `idf.py -C firmware -B build-offline -DFOREARM_NETWORK=OFF build`. No account or hardware is required for these build/host checks. Device replay requires a deliberately configured demo session; it must not be confused with physical touch validation.
+The font and composition checks use the pinned LVGL dependency resolved by the firmware build. An offline firmware build can be checked separately with `idf.py -C firmware -B build-offline -DFOREARM_NETWORK=OFF build`. No account or hardware is required for these build/host checks. Device replay explicitly uses synthetic fixture mode, clears RAM history and sends no real chat or moderation actions; it must not be confused with physical touch validation.
 
 ## Hardware and interaction changes
 
 Record the board revision, orientation, firmware revision and test method. Distinguish real finger interaction, injected input, framebuffer captures and photographs. Report frame rate together with workload and measurement interval. A clean build does not establish display timing, touch alignment or battery safety.
 
+Use `python tools/benchmark_scroll.py --workload warm --output .local/benchmark-warm` and a separate `--workload dense --output .local/benchmark-dense` run to reproduce the public scrolling methods. Both use synthetic fixtures and clear RAM history, then disable injection/fixtures and return LIVE. They send no Twitch actions and preserve the saved profile. Reports retain full private status. Warm scrolling, held injected input and ten gestures (including release/80 ms idle intervals) are separate workloads; none measures physical-finger or photon latency. Benchmark completion is not a frame-rate pass criterion.
+
 Keep LVGL on its UI owner, network work off the UI thread, memory bounded, and selection tied to immutable message/user IDs. Driver changes must preserve the panel's complete-frame transfer protocol unless a replacement has been qualified. Preserve upstream copyright/license notices and document modifications.
 
-Do not enable real moderation as an incidental change. It needs the intended permission grant, verified target identities, deliberate confirmation and explicit validation against a chosen test target. Never send real chat or moderation actions as an unattended test.
+Do not enable real moderation as an incidental change. It needs the intended permission grant, verified target identities, deliberate confirmation and explicit validation against a chosen test target. Never send real chat or moderation actions as an unattended test. A read-only watched channel is excluded from mutation testing, regardless of saved token permissions.
 
 ## Privacy and collaboration
 

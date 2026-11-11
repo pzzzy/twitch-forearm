@@ -1,6 +1,6 @@
 # Twitch integration
 
-Updated 2026-11-10 for the 0.4.0-beta.1 hardware-beta development candidate. Public Device Code login, saved authorization and live EventSub have device evidence. Guarded moderation and confirmed End timeout/Unban are implemented and host-tested; final real-action and physical confirmation qualification is pending. New owners supply their own Public Client ID and channel. Historical v0.3.2 was read only. See [verification](verification.md) for revision-specific evidence and open performance, soak and power limits.
+This guide describes the 0.4.0-beta.1 hardware-beta integration: Public Device Code login, saved authorization, live EventSub, saved read-only profiles, positioned inline emotes and complete sender identities. New owners supply their own Public Client ID and channel. A release's attached qualification summary identifies the tested commit/image and coverage. [Verification](verification.md) preserves historical evidence, including source `54c1169c` with five acknowledged API actions and cleanup but a failed active soak; those results do not qualify another image.
 
 ## Architecture decision
 
@@ -32,7 +32,11 @@ Source: [Device Code Grant](https://dev.twitch.tv/docs/authentication/getting-to
 | Optional future send/reply capability | `user:write:chat` |
 | Verify a non-broadcaster account moderates the selected channel | `user:read:moderated_channels` |
 
-New beta consent requests all four implemented scopes: chat reception, message deletion, banned-user management and moderated-channel lookup. An existing `user:read:chat` grant can continue reading, with actions disabled until fresh consent and role verification. Settings offers Enable moderation. A user-token WebSocket client does not need cloud-bot scopes `user:bot` or `channel:bot`. The setup form requires an explicit channel; the network layer can fall back to the authorized account's channel for an empty stored value. Reading another channel does not imply permission to moderate it. Actions are gated on granted scopes, fresh account/channel generation, online state and verified broadcaster/moderator role. The network layer rechecks these before sending and still handles authoritative API rejection.
+The saved profile controls consent and action availability. Read-only profiles request only `user:read:chat` on future login, hide Enable moderation and deny all mutations in the UI, core policy and worker even when a previously granted token has broader scopes. Switching to read-only retains that token pair; it does not revoke the earlier Twitch grant or require reauthorization merely to change rooms. Moderation-role lookup is skipped in this mode.
+
+Moderation-enabled profiles request all four implemented scopes: reception, deletion, banned-user management and moderated-channel lookup. An existing `user:read:chat` grant can continue reading, with actions disabled until fresh consent and role verification; Settings offers Enable moderation only in this profile. A user-token WebSocket client does not need cloud-bot scopes `user:bot` or `channel:bot`. The setup form requires an explicit channel; the network layer can fall back to the authorized account's channel for an empty stored value. Reading another channel does not imply permission to moderate it. Actions are gated on granted scopes, profile, fresh account/channel generation, online state and verified broadcaster/moderator role. The network layer rechecks these before sending and still handles authoritative API rejection.
+
+The trusted USB `watch` command queues only the requested channel and profile flag. Saved Wi-Fi/client/token state remains worker-owned. Permission removal and session invalidation happen immediately; the worker persists the profile and resolves the exact new broadcaster ID. Check status for the completed channel switch. Reconnecting to the same channel preserves RAM history; changing channels clears the previous room and selection.
 
 Source: [Scope reference](https://dev.twitch.tv/docs/authentication/scopes/).
 
@@ -40,7 +44,9 @@ Source: [Scope reference](https://dev.twitch.tv/docs/authentication/scopes/).
 
 Subscribe to `channel.chat.message`, `channel.chat.message_delete`, `channel.chat.clear_user_messages`, and `channel.chat.clear`. Add `channel.chat.notification` for subscriptions and similar chat notices when the basic reader is stable. Conditions identify both the broadcaster and the authorized reading user.
 
-Normalize messages into a bounded in-memory ring buffer. Retain stable message ID, author ID/login/display name, timestamp, name color, badges, text/emote fragments, channel and source-channel identity, and deletion state. Shared Chat source identity must remain explicit so a moderation tap cannot silently target the wrong channel.
+The bounded ring stores exact channel/message/author IDs, a 100-byte UTF-8 display name, a separate 25-character ASCII login, received time, text and deletion state. Unsupported display-name glyphs select the exact login fallback; names are not truncated into partial identities. Source identity, moderation badges and emote metadata are retained separately. Shared Chat source identity stays explicit so a moderation tap cannot silently target the wrong channel.
+
+For inline emotes, validate the complete fragment-text concatenation against `message.text`, then retain up to eight actual occurrences with UTF-8 byte offset/length. The UI validates each non-overlapping span against its literal token before an available static image replaces it. Other identical tokens stay literal. Missing/mismatched metadata, unavailable assets and overflow keep original text; no global trigger-name replacement is performed.
 
 Scrollback covers retained messages received by this client. Twitch does not replay events missed during a network outage. Show a gap marker after a disconnection; do not invent recovered history. Apply deletion and clear events to stored rows even while the viewport is paused. Pause stops following the live edge while reception continues. Pin the selected message by ID when opening moderation tools so new arrivals cannot change its target.
 
@@ -77,13 +83,13 @@ Deduplicate notifications using the EventSub metadata message ID; Twitch may red
 
 Source: [Duplicate event handling](https://dev.twitch.tv/docs/eventsub/#handling-duplicate-events).
 
-## Implementation gates
+## Integration validation
 
 1. Confirm display/touch controllers, orientation, PSRAM, backlight, and power hardware.
 2. Exercise pause, scrollback, row selection, clear events, and overload using synthetic fixtures.
 3. Build networking with certificate verification, bounded parsing, reconnect/gap behavior, and credential storage.
-4. The registered Public Client ID, browser authorization and read-only live chat gate have passed for the supplied account/channel. Longer token/radio/soak qualification remains separate.
-5. Native moderation policy, exact-target UI, separate confirmation/Undo and unknown-outcome behavior pass host checks using fake network callbacks. Real Delete, Timeout, Ban and Undo validation remains a beta gate in an owned channel with explicitly authorized disposable targets; record only sanitized results.
+4. Verify the configured Public Client ID, browser authorization, saved profile and read-only live chat on the identified image. Record token/radio/soak results separately from initial connection.
+5. Exercise native moderation policy, exact-target UI, separate confirmation/Undo, read-only denial and unknown-outcome behavior with fake network callbacks. Identify the source of any live API evidence and completed cleanup; do not represent historical acknowledgements as actions repeated on another image. A read-only watched channel is never a target for mutation testing.
 
 Unresolved physical requirements include battery capacity, charging protection, enclosure/strap ergonomics, heat, and usable outdoor brightness. Establish the runtime target after measuring actual current draw.
 

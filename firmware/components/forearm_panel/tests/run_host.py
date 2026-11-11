@@ -15,6 +15,11 @@ subprocess.run(["c++", "-std=c++17", "-Wall", "-Wextra", "-Werror",
                 "-I" + str(here.parent / "include"), str(here / "touch_state_test.cpp"),
                 "-o", str(touch_test)], check=True)
 subprocess.run([str(touch_test)], check=True)
+cadence_test = output / "touch-sample-cadence-test"
+subprocess.run(["c++", "-std=c++17", "-Wall", "-Wextra", "-Werror",
+                "-I" + str(here.parent / "include"), str(here / "touch_sample_cadence_test.cpp"),
+                "-o", str(cadence_test)], check=True)
+subprocess.run([str(cadence_test)], check=True)
 latency_test = output / "touch-frame-latency-test"
 subprocess.run(["c++", "-std=c++17", "-Wall", "-Wextra", "-Werror",
                 "-I" + str(here.parent / "include"), str(here / "touch_frame_latency_test.cpp"),

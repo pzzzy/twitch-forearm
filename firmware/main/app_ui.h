@@ -9,6 +9,11 @@ struct _lv_font_t;
 struct AppUiEmote {
     const char *id;
     const char *text; // Alt text remains in the original chat message.
+    // Exact UTF-8 byte occurrence, validated against the retained message.
+    // Missing/invalid spans and occurrences beyond eight keep literal text.
+    std::uint16_t byte_offset = 0;
+    std::uint16_t byte_length = 0;
+    bool position_valid = false;
 };
 
 // All calls are made by the single LVGL/UI task. Networking must queue events.
@@ -17,6 +22,7 @@ struct AppUiStats {
     bool demo;
     bool fixture_mode;
     bool authenticated;
+    bool read_only;
     bool login_visible;
     bool selection_visible;
     std::uint32_t unread;
@@ -57,6 +63,28 @@ struct AppUiStats {
     std::uint32_t sprite_cache_rejected;
     std::uint64_t sprite_cache_build_total_us;
     std::uint32_t sprite_cache_build_max_us;
+    bool author_cache_enabled;
+    std::uint32_t author_cache_bytes;
+    std::uint32_t author_cache_hits;
+    std::uint32_t author_cache_misses;
+    std::uint32_t author_cache_builds;
+    std::uint32_t author_cache_evictions;
+    std::uint32_t author_cache_rejected;
+    std::uint64_t author_cache_build_total_us;
+    std::uint32_t author_cache_build_max_us;
+    std::uint64_t backdrop_draw_total_us;
+    std::uint32_t backdrop_draw_calls;
+    std::uint32_t backdrop_draw_max_us;
+    std::uint64_t author_draw_total_us;
+    std::uint32_t author_draw_calls;
+    std::uint32_t author_draw_max_us;
+    std::uint64_t author_style_total_us;
+    std::uint32_t author_style_calls;
+    std::uint32_t author_style_max_us;
+    std::uint64_t opaque_body_total_us;
+    std::uint32_t opaque_body_calls;
+    std::uint32_t opaque_body_max_us;
+    std::uint64_t author_blit_total_us;
     bool moderation_pending;
     bool moderation_confirmation_visible;
     std::uint32_t moderation_request_id;
@@ -68,11 +96,13 @@ void app_ui_init();
 void app_ui_tick();
 bool app_ui_append(const char *channel_id, const char *message_id,
                    const char *user_id, const char *display_name,
-                   const char *text, std::uint64_t received_at_ms = 0);
+                   const char *text, std::uint64_t received_at_ms = 0,
+                   const char *user_login = nullptr);
 bool app_ui_append_emotes(const char *channel_id, const char *message_id,
                          const char *user_id, const char *display_name,
                          const char *text, const AppUiEmote *emotes,
-                         unsigned emote_count, std::uint64_t received_at_ms = 0);
+                         unsigned emote_count, std::uint64_t received_at_ms = 0,
+                         const char *user_login = nullptr);
 void app_ui_set_message_emotes(const char *channel_id, const char *message_id,
                               const AppUiEmote *emotes, unsigned emote_count);
 void app_ui_delete_message(const char *channel_id, const char *message_id);
@@ -81,6 +111,9 @@ void app_ui_clear_channel(const char *channel_id);
 void app_ui_set_status(const char *status);
 void app_ui_set_network(const char *status);
 void app_ui_set_channel(const char *channel);
+// Apply the profile before its capabilities. Starts read-only until explicitly
+// configured; profile changes invalidate old confirmations and restoration.
+void app_ui_set_read_only(bool enabled);
 void app_ui_set_demo(bool enabled);
 // Explicit synthetic-only hardware qualification. Clears history on entry/exit,
 // suppresses automatic demo arrivals, and always disables moderation in fixture.
@@ -116,6 +149,9 @@ void app_ui_set_font_fallback(const _lv_font_t *fallback);
 void app_ui_reset_perf();
 // Default ON after hardware A/B validation. Safe on the UI owner only.
 void app_ui_set_sprite_cache(bool enabled);
+// Bounded normal-state author sprites; pressed/masked/unsupported styles use
+// LVGL's original label painter. UI owner only, no cache mutation during draw.
+void app_ui_set_author_cache(bool enabled);
 // Default ON after device A/B; runtime switchable for verification. Skips only
 // the native opaque screen background
 // under ready opaque cached body images; does not change layout or interaction.

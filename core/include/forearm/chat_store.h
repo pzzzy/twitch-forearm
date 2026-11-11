@@ -83,13 +83,15 @@ struct MessageInput {
   std::string_view display_name;
   std::string_view text;
   std::uint64_t received_at_ms = 0;
+  std::string_view user_login{};
 };
 
 struct Message {
   FixedText<33> channel_id;
   FixedText<65> message_id;
   FixedText<33> user_id;
-  FixedText<65> display_name;
+  FixedText<101> display_name; // 25 four-byte display-name codepoints, never truncated.
+  FixedText<26> user_login;    // Separate exact ASCII attribution fallback.
   // Twitch permits 500 characters: even 500 four-byte Unicode codepoints fit.
   FixedText<2049> text;
   std::uint64_t sequence = 0;
@@ -128,8 +130,15 @@ class ChatStore {
     if (!message.channel_id.assignId(input.channel_id) ||
         !message.message_id.assignId(input.message_id) ||
         !message.user_id.assignId(input.user_id) ||
-        !message.display_name.assignUtf8(input.display_name) ||
+        !message.display_name.assignUtf8(input.display_name) || message.display_name.truncated() ||
         !message.text.assignUtf8(input.text)) return InsertResult::invalid;
+    if (!input.user_login.empty()) {
+      if (input.user_login.size() > 25) return InsertResult::invalid;
+      for (const unsigned char c : input.user_login)
+        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_'))
+          return InsertResult::invalid;
+      if (!message.user_login.assignId(input.user_login)) return InsertResult::invalid;
+    }
     // Dedupe the retained window, including tombstones, namespaced by channel.
     // EventSub envelope dedupe/replay-gap reporting belongs to the transport.
     for (std::size_t i = 0; i < size_; ++i) {

@@ -4,7 +4,9 @@
 Default smoke run is short. --profile full adds 20 messages/s for 10 minutes,
 100/s for 5 seconds, repeated recovery and an active one-hour soak. The soak
 adds 20/s load and injected input every minute and recovery every ten minutes.
-Reports contain secret-free device status and stay under ignored .local by default.
+--live-between-pulses restores actual chat between soak pulses. Reports retain
+full device status, including account/channel identity; keep them private under
+ignored .local (the default destination).
 """
 import argparse
 import json
@@ -31,15 +33,17 @@ def frame_summary(before, after, seconds):
 
 
 class Qualification:
-    def __init__(self, device, destination, clock=None, sleeper=None):
+    def __init__(self, device, destination, clock=None, sleeper=None, live_between_pulses=False):
         self.device, self.destination = device, destination
         self.now, self.sleep = clock or time.monotonic, sleeper or time.sleep
         self.last_uptime = 0
         self.initial_paused = None
+        self.live_between_pulses = live_between_pulses
         self.roundtrips = []
         self.report = {'schema': 1, 'started_utc': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
                        'status': 'running', 'checks': [], 'samples': [],
-                       'scope': 'Synthetic UI load and network recovery only; no chat posts or moderation'}
+                       'live_between_pulses': live_between_pulses,
+                       'scope': 'Synthetic UI load, observed Twitch reception and network recovery; no chat posts or moderation'}
 
     def save(self):
         self.destination.parent.mkdir(parents=True, exist_ok=True)
@@ -170,6 +174,16 @@ class Qualification:
             self.command('touch', x=0, y=0, pressed=0, enabled=0)
 
     def activity_pulse(self, iteration, duration=5):
+        try:
+            return self._fixture_activity_pulse(iteration, duration)
+        finally:
+            if self.live_between_pulses:
+                self._restore_reading('live')
+                state = self.snapshot(f'soak-{iteration}-live-between-pulses')
+                self.check(f'Live chat visible between pulses {iteration}',
+                           not state['fixtures']['enabled'] and not state['ui']['paused'])
+
+    def _fixture_activity_pulse(self, iteration, duration=5):
         """Synthetic load plus injected pause, drag and Go live; no live posts."""
         self.command('fixture_mode', enabled=0)
         self.command('fixture_mode', enabled=1)
@@ -246,8 +260,11 @@ class Qualification:
         finally:
             # A slow USB or recovery operation may cross the deadline. Drain
             # the bounded load and leave an explicit final health sample.
-            self.command('load_stop')
-            self.command('touch', x=0, y=0, pressed=0, enabled=0)
+            if self.live_between_pulses:
+                self._restore_reading('live')
+            else:
+                self.command('load_stop')
+                self.command('touch', x=0, y=0, pressed=0, enabled=0)
             final = self.snapshot('soak-final-before-cleanup')
             samples = [sample['device'] for sample in self.report['samples'][sample_start:]]
             memory = {}
@@ -256,25 +273,36 @@ class Qualification:
                 memory[key] = {'warm_baseline': baseline['board'][key], 'minimum': min(values),
                                'final': final['board'][key], 'drift_bytes': final['board'][key] - baseline['board'][key]}
             retained = [sample['ui']['retained'] for sample in samples]
+            received_before = baseline['twitch'].get('received_messages')
+            received_after = final['twitch'].get('received_messages')
+            received_delta = received_after - received_before if isinstance(received_before, int) and isinstance(received_after, int) else None
             self.report['active_soak'] = {'requested_seconds': seconds, 'elapsed_seconds': self.now() - started,
+                'display_mode': 'live-between-fixture-pulses' if self.live_between_pulses else 'fixtures-between-pulses',
                 'activity_period_seconds': activity_period, 'recovery_period_seconds': recovery_period,
                 'activity_pulses': pulses, 'recovery_pairs': recoveries, 'input': 'injected',
                 'memory_bytes': memory, 'retention': {'minimum': min(retained), 'maximum': max(retained), 'final': retained[-1]},
+                'memory_comparison': 'Numerical baseline/minimum/final only; changing chat/cache content prevents a leak conclusion from drift alone.',
+                'actual_received_before': received_before, 'actual_received_after': received_after,
+                'actual_received_delta': received_delta,
+                'actual_received_meaning': 'Device Twitch received_messages counter delta, excluding generated fixtures; includes messages received during fixture pulses and recovery.',
                 'physical_touch_latency_measured': False}
             self.save()
         healthy(final)
         self.check('Active soak reached monotonic duration', self.now() - started >= seconds)
 
-    def cleanup(self):
+    def _restore_reading(self, final_action):
         failures = []
         for name, fields in [('load_stop', {}), ('touch', {'x': 0, 'y': 0, 'pressed': 0, 'enabled': 0}),
-                             ('fixture_mode', {'enabled': 0}), ('pause' if self.initial_paused else 'live', {})]:
+                             ('fixture_mode', {'enabled': 0}), (final_action, {})]:
             try:
                 self.command(name, **fields)
             except Exception as error:
                 failures.append((name, error))
         if failures:
             raise RuntimeError('Cleanup could not confirm: ' + ', '.join(name for name, _ in failures)) from failures[0][1]
+
+    def cleanup(self):
+        self._restore_reading('live' if self.live_between_pulses or not self.initial_paused else 'pause')
 
     def finish(self, success):
         self.report['status'] = 'passed' if success else 'failed'
@@ -295,6 +323,8 @@ def main():
     parser.add_argument('--recoveries', type=int, default=3)
     parser.add_argument('--refresh', action='store_true', help='Also rotate the saved OAuth token once, without revealing it')
     parser.add_argument('--capture', action='store_true', help='Save a final screenshot after stress has stopped')
+    parser.add_argument('--live-between-pulses', action='store_true',
+                        help='Restore actual chat in LIVE between soak fixture pulses, including warm-up and cleanup')
     parser.add_argument('--output', type=Path, default=Path('.local') / ('qualification-' + time.strftime('%Y%m%d-%H%M%S')) / 'report.json')
     args = parser.parse_args()
     if not (2 <= args.smoke_seconds <= 60 and 1 <= args.load_seconds <= 600 and
@@ -304,7 +334,7 @@ def main():
         raise FileExistsError(args.output)
     success = False
     with connected(args.port) as device:
-        run = Qualification(device, args.output)
+        run = Qualification(device, args.output, live_between_pulses=args.live_between_pulses)
         try:
             initial = run.wait_connected('initial')
             run.pause_check()

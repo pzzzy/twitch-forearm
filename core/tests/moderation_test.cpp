@@ -156,8 +156,26 @@ void outcomes_and_single_submission() {
     ledger.finish(next.request_id, next.session_generation);
     CHECK(ledger.accept(next, allowed, 2000) == ModerationDenial::DuplicateRequest);
 }
+void read_only_profile() {
+    auto broad_grants = caps();
+    broad_grants.read_only = true;
+    ModerationLedger ledger;
+    for (const auto action : {ModerationAction::DeleteMessage, ModerationAction::Timeout, ModerationAction::Ban, ModerationAction::Unban}) {
+        auto request = target(action);
+        if (action == ModerationAction::Timeout) request.timeout_seconds = 60;
+        CHECK(moderation_validate(request, broad_grants, 2000) == ModerationDenial::ReadOnlyProfile);
+        ModerationHttpRequest wire;
+        CHECK(!moderation_build_http(request, broad_grants, 2000, wire));
+        CHECK(wire.url[0] == 0 && wire.body[0] == 0); // No mutation can reach HTTP.
+        CHECK(ledger.accept(request, broad_grants, 2000) == ModerationDenial::ReadOnlyProfile);
+    }
+    // A later permission-enabled profile still requires a new selection under
+    // its new session generation; old read-only targets cannot become actions.
+    broad_grants.read_only = false; ++broad_grants.generation;
+    CHECK(moderation_validate(target(), broad_grants, 2000) == ModerationDenial::StaleSession);
+}
 } // namespace
 int main() {
-    policy(); identity_and_wire_contract(); outcomes_and_single_submission();
+    policy(); identity_and_wire_contract(); outcomes_and_single_submission(); read_only_profile();
     std::cout << "moderation contract: " << assertions << " assertions passed\n";
 }

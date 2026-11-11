@@ -26,9 +26,16 @@ class FakeClock:
 class FakeSoakDevice:
     def __init__(self, clock):
         self.clock, self.calls, self.samples = clock, [], 0
+        self.fixture_enabled = self.paused = self.injection_enabled = False
 
     def command(self, name, **fields):
         self.calls.append((name, fields))
+        if name == 'fixture_mode':
+            self.fixture_enabled = bool(fields['enabled'])
+        if name in ('pause', 'live'):
+            self.paused = name == 'pause'
+        if name == 'touch':
+            self.injection_enabled = bool(fields['enabled'])
         if name != 'status':
             return {'ok': True}
         self.samples += 1
@@ -36,8 +43,10 @@ class FakeSoakDevice:
                 'board': {'frames': self.samples, 'flush_errors': 0, 'touch_errors': 0,
                           'touch_queue_overflows': 0, 'free_internal': 100000 - self.samples,
                           'largest_dma_block': 50000 - self.samples, 'free_psram': 6000000 - self.samples},
-                'ui': {'paused': False, 'retained': 100},
+                'ui': {'paused': self.paused, 'retained': 100},
+                'fixtures': {'enabled': self.fixture_enabled},
                 'twitch': {'wifi_connected': True, 'authenticated': True, 'chat_connected': True,
+                           'received_messages': 1000 + self.samples * 3,
                            'dropped_events': 0, 'malformed_frames': 0}}
 
 
@@ -135,6 +144,139 @@ class QualificationTests(unittest.TestCase):
             self.assertEqual(run.report['active_soak']['activity_pulses'], 0)
             self.assertIn(('load_stop', {}), device.calls)
             self.assertIn(('touch', {'x': 0, 'y': 0, 'pressed': 0, 'enabled': 0}), device.calls)
+
+    def test_live_between_pulses_restores_actual_chat_before_every_idle_and_recovery(self):
+        with tempfile.TemporaryDirectory() as directory:
+            clock = FakeClock()
+            device = FakeSoakDevice(clock)
+            idle_observations = []
+
+            def idle(seconds):
+                idle_observations.append((device.fixture_enabled, device.paused, device.injection_enabled))
+                self.assertFalse(device.fixture_enabled)
+                self.assertFalse(device.paused)
+                self.assertFalse(device.injection_enabled)
+                clock.sleep(seconds)
+
+            run = Qualification(device, Path(directory) / 'report.json', clock.now, idle,
+                                live_between_pulses=True)
+            run.save = Mock()
+
+            def fixture_pulse(iteration, duration):
+                run.command('fixture_mode', enabled=1)
+                run.command('touch', x=140, y=160, pressed=1, enabled=1)
+                run.command('pause')
+                clock.sleep(duration)
+                return run.snapshot('fixture-' + str(iteration))
+
+            def recovery(command, duration_ms, iteration):
+                self.assertFalse(device.fixture_enabled)
+                self.assertFalse(device.paused)
+                clock.sleep(4)
+                run.snapshot('recovered-' + command)
+
+            run._fixture_activity_pulse = Mock(side_effect=fixture_pulse)
+            run.recover = Mock(side_effect=recovery)
+            run.active_soak(3600)
+            report = run.report['active_soak']
+            self.assertEqual(report['elapsed_seconds'], 3600)
+            self.assertEqual(report['activity_pulses'], 60)
+            self.assertEqual(run._fixture_activity_pulse.call_count, 61)
+            self.assertEqual(report['recovery_pairs'], 5)
+            self.assertEqual([call.args[0] for call in run.recover.call_args_list],
+                             ['network_disconnect', 'wifi_disconnect'] * 5)
+            self.assertTrue(idle_observations)
+            self.assertLessEqual(max(clock.sleeps), 30)
+            self.assertEqual(report['display_mode'], 'live-between-fixture-pulses')
+            self.assertTrue(run.report['live_between_pulses'])
+            self.assertEqual(report['actual_received_delta'],
+                             report['actual_received_after'] - report['actual_received_before'])
+            self.assertGreater(report['actual_received_delta'], 0)
+            self.assertIn('excluding generated fixtures', report['actual_received_meaning'])
+            self.assertIn('prevents a leak conclusion', report['memory_comparison'])
+            self.assertFalse(report['physical_touch_latency_measured'])
+            self.assertTrue(all(check['passed'] for check in run.report['checks']))
+            resumes = [sample['device'] for sample in run.report['samples']
+                       if sample['label'].endswith('-live-between-pulses')]
+            self.assertEqual(len(resumes), 61) # Warm-up included, no fixture during baseline.
+            self.assertTrue(all(not state['fixtures']['enabled'] and not state['ui']['paused'] for state in resumes))
+            self.assertFalse(device.fixture_enabled)
+            self.assertFalse(device.injection_enabled)
+
+    def test_live_pulse_failure_restores_chat_and_preserves_the_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            clock = FakeClock()
+            device = FakeSoakDevice(clock)
+            device.fixture_enabled = device.paused = device.injection_enabled = True
+            run = Qualification(device, Path(directory) / 'report.json', clock.now, clock.sleep,
+                                live_between_pulses=True)
+            run.save = Mock()
+            run._fixture_activity_pulse = Mock(side_effect=AssertionError('pulse failed'))
+            with self.assertRaisesRegex(AssertionError, 'pulse failed'):
+                run.activity_pulse('warmup')
+            self.assertEqual([name for name, _ in device.calls],
+                             ['load_stop', 'touch', 'fixture_mode', 'live', 'status'])
+            self.assertFalse(device.fixture_enabled)
+            self.assertFalse(device.injection_enabled)
+            self.assertFalse(device.paused)
+
+    def test_live_pulse_cleanup_attempts_all_restoration_steps_after_stop_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            clock = FakeClock()
+            device = FakeSoakDevice(clock)
+            device.fixture_enabled = device.paused = device.injection_enabled = True
+            original = device.command
+
+            def command(name, **fields):
+                value = original(name, **fields)
+                if name == 'load_stop':
+                    raise TimeoutError('stop timeout')
+                return value
+
+            device.command = command
+            run = Qualification(device, Path(directory) / 'report.json', clock.now, clock.sleep,
+                                live_between_pulses=True)
+            run._fixture_activity_pulse = Mock(return_value={})
+            with self.assertRaisesRegex(RuntimeError, 'load_stop'):
+                run.activity_pulse(1)
+            self.assertEqual([name for name, _ in device.calls],
+                             ['load_stop', 'touch', 'fixture_mode', 'live'])
+            self.assertFalse(device.fixture_enabled)
+            self.assertFalse(device.injection_enabled)
+            self.assertFalse(device.paused)
+
+    def test_live_mode_cleanup_keeps_explicit_monitor_live_even_if_initially_paused(self):
+        with tempfile.TemporaryDirectory() as directory:
+            device = Mock()
+            run = Qualification(device, Path(directory) / 'report.json', live_between_pulses=True)
+            run.initial_paused = True
+            run.cleanup()
+            self.assertEqual([call.args[0] for call in device.command.call_args_list],
+                             ['load_stop', 'touch', 'fixture_mode', 'live'])
+
+    def test_live_mode_preserves_zero_error_soak_gate(self):
+        with tempfile.TemporaryDirectory() as directory:
+            clock = FakeClock()
+            device = FakeSoakDevice(clock)
+            run = Qualification(device, Path(directory) / 'report.json', clock.now, clock.sleep,
+                                live_between_pulses=True)
+            run.save = Mock()
+
+            def fixture_pulse(iteration, duration):
+                clock.sleep(duration)
+                state = run.snapshot('fixture-' + str(iteration))
+                if iteration != 'warmup':
+                    state['board']['touch_errors'] = 1
+                return state
+
+            run._fixture_activity_pulse = Mock(side_effect=fixture_pulse)
+            with self.assertRaisesRegex(AssertionError, 'No new soak touch_errors'):
+                run.active_soak(20)
+            self.assertFalse(device.fixture_enabled)
+            self.assertFalse(device.injection_enabled)
+            self.assertFalse(device.paused)
+            self.assertFalse(next(check for check in run.report['checks']
+                                  if check['name'] == 'No new soak touch_errors')['passed'])
 
     def test_injection_is_explicit_and_release_runs_after_failure(self):
         with tempfile.TemporaryDirectory() as directory:

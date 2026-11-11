@@ -11,6 +11,9 @@
 #include "driver/ledc.h"
 #include "driver/spi_master.h"
 #include "esp_heap_caps.h"
+#include "esp_attr.h"
+#include "esp_intr_alloc.h"
+#include "esp_memory_utils.h"
 #include "esp_lcd_panel_io.h"
 #include "esp_lcd_panel_ops.h"
 #include "esp_lcd_panel_vendor.h"
@@ -26,6 +29,7 @@
 #include "axs_touch_state.h"
 #include "rgb565_transport.h"
 #include "touch_frame_latency.h"
+#include "touch_sample_cadence.h"
 
 static_assert(LV_COLOR_DEPTH == 16, "JC3248W535 uses RGB565");
 static_assert(LV_COLOR_16_SWAP == 0, "Transport performs the wire byte swap");
@@ -46,6 +50,11 @@ constexpr gpio_num_t BL_PIN = GPIO_NUM_1;
 constexpr gpio_num_t TE_PIN = GPIO_NUM_38;
 constexpr i2c_port_t TOUCH_PORT = I2C_NUM_0;
 constexpr uint8_t TOUCH_ADDRESS = 0x3b;
+// The legacy driver's IRAM interrupt can dereference these while flash cache
+// is unavailable. Keep both protocol buffers explicitly in internal DRAM.
+DRAM_ATTR const uint8_t TOUCH_COMMAND[]{0xb5, 0xab, 0xa5, 0x5a, 0, 0, 0, 8, 0, 0, 0};
+DRAM_ATTR uint8_t touch_packet[8]{};
+constexpr TickType_t TOUCH_TRANSACTION_TIMEOUT = pdMS_TO_TICKS(10);
 constexpr TickType_t DMA_TIMEOUT = pdMS_TO_TICKS(100);
 constexpr uint32_t TE_TIMEOUT_MS = 20;
 
@@ -394,21 +403,46 @@ void flush(lv_disp_drv_t* driver, const lv_area_t* area, lv_color_t* colors) {
     }
 }
 
-AxsTouchReport read_physical() {
+void record_touch_error(esp_err_t code, uint32_t operation, int64_t started_us,
+                        int64_t cycle_started_us, uint32_t poll_gap_us) {
+    const int64_t completed_us = esp_timer_get_time();
+    ++touch_work.touch_errors;
+    if (operation == 1) ++touch_work.touch_write_errors;
+    else ++touch_work.touch_read_errors;
+    if (code == ESP_ERR_TIMEOUT) ++touch_work.touch_timeout_errors;
+    else if (code == ESP_FAIL) ++touch_work.touch_fail_errors;
+    else ++touch_work.touch_other_errors;
+    touch_work.touch_last_error_code = code;
+    touch_work.touch_last_error_operation = operation;
+    touch_work.touch_last_error_at_us = completed_us;
+    touch_work.touch_last_error_duration_us = static_cast<uint32_t>(completed_us - started_us);
+    touch_work.touch_last_error_cycle_us = static_cast<uint32_t>(completed_us - cycle_started_us);
+    touch_work.touch_last_error_poll_gap_us = poll_gap_us;
+}
+
+AxsTouchReport read_physical(uint32_t poll_gap_us) {
     ++touch_work.touch_polls;
     // AXS15231B touch packet: gesture, point count, X-high/event, X-low,
     // Y-high, Y-low, two reserved bytes. Separate write/read matches vendor IO.
-    constexpr uint8_t command[] = {0xb5, 0xab, 0xa5, 0x5a, 0, 0, 0, 8, 0, 0, 0};
-    uint8_t data[8]{};
+    const int64_t cycle_started = esp_timer_get_time();
     esp_err_t error = i2c_master_write_to_device(
-        TOUCH_PORT, TOUCH_ADDRESS, command, sizeof(command), pdMS_TO_TICKS(10));
-    if (error == ESP_OK)
-        error = i2c_master_read_from_device(
-            TOUCH_PORT, TOUCH_ADDRESS, data, sizeof(data), pdMS_TO_TICKS(10));
+        TOUCH_PORT, TOUCH_ADDRESS, TOUCH_COMMAND, sizeof(TOUCH_COMMAND), TOUCH_TRANSACTION_TIMEOUT);
+    touch_work.touch_write_us_last = static_cast<uint32_t>(esp_timer_get_time() - cycle_started);
+    touch_work.touch_write_us_max = std::max(touch_work.touch_write_us_max, touch_work.touch_write_us_last);
     if (error != ESP_OK) {
-        ++touch_work.touch_errors;
+        record_touch_error(error, 1, cycle_started, cycle_started, poll_gap_us);
         return {AxsTouchKind::TransportError};
     }
+    const int64_t read_started = esp_timer_get_time();
+    error = i2c_master_read_from_device(
+        TOUCH_PORT, TOUCH_ADDRESS, touch_packet, sizeof(touch_packet), TOUCH_TRANSACTION_TIMEOUT);
+    touch_work.touch_read_us_last = static_cast<uint32_t>(esp_timer_get_time() - read_started);
+    touch_work.touch_read_us_max = std::max(touch_work.touch_read_us_max, touch_work.touch_read_us_last);
+    if (error != ESP_OK) {
+        record_touch_error(error, 2, read_started, cycle_started, poll_gap_us);
+        return {AxsTouchKind::TransportError};
+    }
+    const auto& data = touch_packet;
     touch_work.touch_present = true;
     memcpy(touch_work.last_touch_packet, data, sizeof(data));
     if (std::all_of(std::begin(data), std::end(data), [](uint8_t b) { return b == 0xff; }))
@@ -456,20 +490,37 @@ AxsTouchReport read_physical() {
 }
 
 void touch_sampler(void*) {
+    // FreeRTOS dynamic task stacks are internal in this SDK. The legacy helper
+    // builds its command links on this stack, which its IRAM ISR also reads.
+    uint8_t stack_probe;
+    ESP_ERROR_CHECK(esp_ptr_internal(&stack_probe) && esp_ptr_internal(TOUCH_COMMAND) &&
+                    esp_ptr_internal(touch_packet) ? ESP_OK : ESP_ERR_INVALID_STATE);
     AxsTouchState state;
     uint32_t physical_sequence = 0;
     uint64_t physical_pressed_at_us = 0;
     int64_t previous_sample_us = 0;
-    TickType_t wake = xTaskGetTickCount();
+    bool have_previous_sample = false;
+    TouchSampleCadence cadence;
+    touch_work.touch_sampler_core = xPortGetCoreID();
     touch_work.touch_sampler_running = true;
     for (;;) {
-        const int64_t sampled_us = esp_timer_get_time();
-        if (previous_sample_us) {
-            const auto gap = static_cast<uint32_t>(sampled_us - previous_sample_us);
-            touch_work.touch_sample_gap_max_us = std::max(touch_work.touch_sample_gap_max_us, gap);
+        // RTOS delays can wake before a microsecond deadline because of tick
+        // phase. Recheck without polling; never spin or replay missed slots.
+        while (const auto wait_us = cadence.wait_us(esp_timer_get_time())) {
+            const auto delay_ms = static_cast<uint32_t>((wait_us + 999) / 1000);
+            vTaskDelay(std::max<TickType_t>(1, pdMS_TO_TICKS(delay_ms)));
         }
+        const int64_t sampled_us = esp_timer_get_time();
+        const auto gap = have_previous_sample ? static_cast<uint32_t>(sampled_us - previous_sample_us) : 0;
+        if (have_previous_sample) {
+            if (!touch_work.touch_sample_gap_min_us || gap < touch_work.touch_sample_gap_min_us)
+                touch_work.touch_sample_gap_min_us = gap;
+            if (gap < TouchSampleCadence::period_us) ++touch_work.touch_fast_polls;
+        }
+        touch_work.touch_sample_gap_max_us = std::max(touch_work.touch_sample_gap_max_us, gap);
         previous_sample_us = sampled_us;
-        const AxsTouchReport report = read_physical();
+        have_previous_sample = true;
+        const AxsTouchReport report = read_physical(gap);
         const uint64_t received_us = esp_timer_get_time();
         const AxsTouchAction action = state.apply(report);
         if (action == AxsTouchAction::Press) {
@@ -501,7 +552,7 @@ void touch_sampler(void*) {
         touch_work.touch_queue_depth = touch_queue_count;
         touch_published = touch_work;
         portEXIT_CRITICAL(&touch_lock);
-        vTaskDelayUntil(&wake, std::max<TickType_t>(1, pdMS_TO_TICKS(8)));
+        cadence.completed(sampled_us, esp_timer_get_time());
     }
 }
 
@@ -688,7 +739,11 @@ void board_display_init() {
     touch_bus.scl_pullup_en = GPIO_PULLUP_DISABLE;
     touch_bus.master.clk_speed = 400000;
     ESP_ERROR_CHECK(i2c_param_config(TOUCH_PORT, &touch_bus));
-    ESP_ERROR_CHECK(i2c_driver_install(TOUCH_PORT, touch_bus.mode, 0, 0, 0));
+    // SDK legacy i2c.h recommends IRAM allocation for time-sensitive slaves
+    // when flash/cache can be unavailable. This preserves the 10 ms budget;
+    // queued completion can now arrive even during a cache-off interval.
+    ESP_ERROR_CHECK(i2c_driver_install(TOUCH_PORT, touch_bus.mode, 0, 0, ESP_INTR_FLAG_IRAM));
+    touch_work.touch_i2c_iram = true;
     lv_indev_drv_init(&touch_driver);
     touch_driver.type = LV_INDEV_TYPE_POINTER;
     touch_driver.disp = display;
@@ -696,7 +751,7 @@ void board_display_init() {
     touch_device = lv_indev_drv_register(&touch_driver);
     ESP_ERROR_CHECK(touch_device ? ESP_OK : ESP_ERR_NO_MEM);
     const BaseType_t sampler_created = xTaskCreatePinnedToCore(
-        touch_sampler, "physical-touch", 4096, nullptr, 4, nullptr, 0);
+        touch_sampler, "physical-touch", 4096, nullptr, 4, nullptr, 1);
     ESP_ERROR_CHECK(sampler_created == pdPASS ? ESP_OK : ESP_ERR_NO_MEM);
     if (ASYNC_DISPLAY_TRANSPORT) {
         const BaseType_t worker_created = xTaskCreatePinnedToCore(
@@ -760,6 +815,13 @@ BoardStats board_stats() {
     portEXIT_CRITICAL(&touch_lock);
 #define PHYSICAL_METRIC(name) snapshot.name = physical.name
     PHYSICAL_METRIC(touch_polls); PHYSICAL_METRIC(touch_errors);
+    PHYSICAL_METRIC(touch_write_errors); PHYSICAL_METRIC(touch_read_errors);
+    PHYSICAL_METRIC(touch_timeout_errors); PHYSICAL_METRIC(touch_fail_errors); PHYSICAL_METRIC(touch_other_errors);
+    PHYSICAL_METRIC(touch_last_error_code); PHYSICAL_METRIC(touch_last_error_operation);
+    PHYSICAL_METRIC(touch_last_error_at_us); PHYSICAL_METRIC(touch_last_error_duration_us);
+    PHYSICAL_METRIC(touch_last_error_cycle_us); PHYSICAL_METRIC(touch_last_error_poll_gap_us);
+    PHYSICAL_METRIC(touch_write_us_last); PHYSICAL_METRIC(touch_write_us_max);
+    PHYSICAL_METRIC(touch_read_us_last); PHYSICAL_METRIC(touch_read_us_max); PHYSICAL_METRIC(touch_i2c_iram);
     PHYSICAL_METRIC(touch_contacts); PHYSICAL_METRIC(touch_pressed_samples);
     PHYSICAL_METRIC(physical_press_sequence);
     PHYSICAL_METRIC(invalid_touch_samples); PHYSICAL_METRIC(touch_zero_points);
@@ -773,7 +835,8 @@ BoardStats board_stats() {
     PHYSICAL_METRIC(touch_consecutive_errors_max);
     PHYSICAL_METRIC(touch_queue_coalesced); PHYSICAL_METRIC(touch_queue_overflows);
     PHYSICAL_METRIC(touch_queue_depth); PHYSICAL_METRIC(touch_queue_peak);
-    PHYSICAL_METRIC(touch_sample_gap_max_us); PHYSICAL_METRIC(touch_sampler_running);
+    PHYSICAL_METRIC(touch_sample_gap_min_us); PHYSICAL_METRIC(touch_sample_gap_max_us);
+    PHYSICAL_METRIC(touch_fast_polls); PHYSICAL_METRIC(touch_sampler_core); PHYSICAL_METRIC(touch_sampler_running);
     PHYSICAL_METRIC(last_raw_x); PHYSICAL_METRIC(last_raw_y);
     PHYSICAL_METRIC(last_screen_x); PHYSICAL_METRIC(last_screen_y);
     PHYSICAL_METRIC(physical_pressed); PHYSICAL_METRIC(touch_present);

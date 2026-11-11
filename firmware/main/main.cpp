@@ -257,12 +257,18 @@ void status(cJSON* response) {
     BM(touch_frame_latency_us_total);BM(touch_frame_latency_last_sequence);
     BM(touch_frame_latency_dropped);BM(touch_frame_latency_ignored_injected);
     BM(te_edges); BM(te_wait_timeouts); BM(touch_polls); BM(touch_errors); BM(touch_contacts);
+    BM(touch_write_errors);BM(touch_read_errors);BM(touch_timeout_errors);BM(touch_fail_errors);BM(touch_other_errors);
+    BM(touch_last_error_code);BM(touch_last_error_operation);BM(touch_last_error_at_us);
+    BM(touch_last_error_duration_us);BM(touch_last_error_cycle_us);BM(touch_last_error_poll_gap_us);
+    BM(touch_write_us_last);BM(touch_write_us_max);BM(touch_read_us_last);BM(touch_read_us_max);
     BM(touch_pressed_samples); BM(injected_samples); BM(invalid_touch_samples);
     BM(touch_zero_points); BM(touch_many_points); BM(touch_out_of_bounds); BM(touch_all_ff);
     BM(touch_idle_packets); BM(touch_nonzero_headers);
     BM(touch_down_events); BM(touch_up_events); BM(touch_contact_events); BM(touch_reserved_events);
     BM(touch_queue_events);BM(touch_queue_coalesced);BM(touch_queue_overflows);
     BM(touch_queue_depth);BM(touch_queue_peak);BM(touch_sample_gap_max_us);
+    BM(touch_sample_gap_min_us);BM(touch_fast_polls);
+    BM(touch_sampler_core);
     BM(touch_release_edges);BM(touch_error_cancels);BM(touch_no_data_held_samples);
     BM(touch_consecutive_errors);BM(touch_consecutive_errors_max);
     BM(logical_flushes);BM(logical_nonfinal_flushes);
@@ -286,6 +292,7 @@ void status(cJSON* response) {
     flag(board,"display_transfer_pending",b.display_transfer_pending);
     flag(board,"display_fault",b.display_fault);
     flag(board,"staged_transport_copy",b.staged_transport_copy);
+    flag(board,"touch_i2c_iram",b.touch_i2c_iram);
     auto ui = cJSON_AddObjectToObject(response, "ui");
 #define UM(name) metric(ui, #name, u.name)
     UM(unread); UM(retained); UM(anchor_sequence); UM(anchor_offset); UM(scroll_y);
@@ -295,14 +302,23 @@ void status(cJSON* response) {
     UM(text_draw_total_us);UM(text_draw_calls);UM(text_draw_max_us);
     UM(sprite_cache_bytes);UM(sprite_cache_hits);UM(sprite_cache_misses);UM(sprite_cache_builds);
     UM(sprite_cache_evictions);UM(sprite_cache_rejected);UM(sprite_cache_build_total_us);UM(sprite_cache_build_max_us);
+    UM(author_cache_bytes);UM(author_cache_hits);UM(author_cache_misses);UM(author_cache_builds);
+    UM(author_cache_evictions);UM(author_cache_rejected);UM(author_cache_build_total_us);UM(author_cache_build_max_us);
+    UM(backdrop_draw_total_us);UM(backdrop_draw_calls);UM(backdrop_draw_max_us);
+    UM(author_draw_total_us);UM(author_draw_calls);UM(author_draw_max_us);
+    UM(author_style_total_us);UM(author_style_calls);UM(author_style_max_us);
+    UM(opaque_body_total_us);UM(opaque_body_calls);UM(opaque_body_max_us);UM(author_blit_total_us);
     UM(backdrop_pixels_skipped);UM(backdrop_culled_draws);UM(backdrop_fallback_draws);
     UM(moderation_request_id);UM(moderation_submitted);
     metric(ui,"moderation_state",static_cast<unsigned>(u.moderation_state));
 #undef UM
     flag(ui, "paused", u.paused); flag(ui, "demo", u.demo); flag(ui, "authenticated", u.authenticated);
+    flag(ui,"fixture_mode",u.fixture_mode);
     flag(ui, "login_visible", u.login_visible); flag(ui, "selection_visible", u.selection_visible);
     flag(ui,"sprite_cache_enabled",u.sprite_cache_enabled);
+    flag(ui,"author_cache_enabled",u.author_cache_enabled);
     flag(ui,"backdrop_culling_enabled",u.backdrop_culling_enabled);
+    flag(ui,"read_only",u.read_only);
     flag(ui,"moderation_pending",u.moderation_pending);
     flag(ui,"moderation_confirmation_visible",u.moderation_confirmation_visible);
     auto net = cJSON_AddObjectToObject(response, "twitch");
@@ -310,6 +326,7 @@ void status(cJSON* response) {
     flag(net, "configured", t.configured); flag(net, "wifi_connected", t.wifi_connected);
     flag(net, "time_synchronized", t.time_synchronized); flag(net, "authenticated", t.authenticated);
     flag(net, "chat_connected", t.chat_connected); flag(net, "login_pending", t.login_pending);
+    flag(net,"read_only",t.read_only);
     metric(net, "received_messages", t.received_messages); metric(net, "dropped_events", t.dropped_events);
     metric(net, "reconnects", t.reconnects); metric(net, "malformed_frames", t.malformed_frames);
     metric(net,"worker_stack_free",t.worker_stack_free);metric(net,"websocket_stack_free",t.websocket_stack_free);
@@ -359,6 +376,7 @@ void command(char* input) {
         ui_frame_count=ui_frame_position=ui_frame_max=0;ui_frame_times.fill(0);app_ui_reset_perf();board_reset_touch_latency();
     }
     else if (!strcmp(cmd,"sprite_cache")) app_ui_set_sprite_cache(num(request,"enabled",1)!=0);
+    else if (!strcmp(cmd,"author_cache")) app_ui_set_author_cache(num(request,"enabled",1)!=0);
     else if (!strcmp(cmd,"backdrop_culling")) app_ui_set_backdrop_culling(num(request,"enabled",1)!=0);
     else if (!strcmp(cmd,"transport_copy")) board_set_staged_transport_copy(num(request,"staged",0)!=0);
     else if (!strcmp(cmd,"network_disconnect")) twitch_request_disconnect_for_test(std::clamp(num(request,"duration_ms",5000),1000,30000));
@@ -393,9 +411,21 @@ void command(char* input) {
             cJSON* item=nullptr;
             cJSON_ArrayForEach(item,array) {
                 if(count==8) break;
-                emotes[count++]={str(item,"id"),str(item,"text")};
+                auto& emote=emotes[count++];
+                emote.id=str(item,"id");emote.text=str(item,"text");
+                const auto* offset=cJSON_GetObjectItemCaseSensitive(item,"byte_offset");
+                const auto* length=cJSON_GetObjectItemCaseSensitive(item,"byte_length");
+                const int start=num(item,"byte_offset",-1),bytes=num(item,"byte_length",-1);
+                const auto* positioned=cJSON_GetObjectItemCaseSensitive(item,"position_valid");
+                emote.position_valid=cJSON_IsNumber(offset) && cJSON_IsNumber(length) &&
+                    offset->valuedouble==start && length->valuedouble==bytes && start>=0 && start<=2048 &&
+                    bytes>0 && bytes<=2048 && start<=2048-bytes && (!positioned || cJSON_IsTrue(positioned));
+                if(emote.position_valid) {
+                    emote.byte_offset=static_cast<uint16_t>(start);emote.byte_length=static_cast<uint16_t>(bytes);
+                }
             }
-            ok=app_ui_append_emotes("demo",id,"fixture-viewer",*name?name:"layout_test",text,emotes,count,esp_timer_get_time()/1000);
+            ok=app_ui_append_emotes("demo",id,"fixture-viewer",*name?name:"layout_test",text,emotes,count,
+                                    esp_timer_get_time()/1000,str(request,"user_login"));
         }
     }
     else if (!strcmp(cmd,"emote_seed")) {
@@ -431,6 +461,11 @@ void command(char* input) {
             hex[BOARD_WIDTH*4]=0; cJSON_AddStringToObject(response, "data", hex);
             metric(response, "checksum", fnv(row, BOARD_WIDTH*2)); metric(response, "y", y);
         }
+    } else if (!strcmp(cmd,"watch")) {
+        const auto* mode=cJSON_GetObjectItemCaseSensitive(request,"read_only");
+        ok=!mode || cJSON_IsBool(mode) || (cJSON_IsNumber(mode) && (mode->valuedouble==0 || mode->valuedouble==1));
+        if(ok)ok=twitch_watch_channel(str(request,"channel"),!mode || cJSON_IsTrue(mode) ||
+                                     (cJSON_IsNumber(mode) && mode->valuedouble==1));
     } else if (!strcmp(cmd, "config")) ok = twitch_set_config(str(request,"ssid"),str(request,"password"),str(request,"client_id"),str(request,"channel"));
     else if (!strcmp(cmd, "login")) twitch_request_login();
     else if (!strcmp(cmd,"login_info")) {
@@ -452,6 +487,7 @@ void usb_poll() {
     }
 }
 void network_events() {
+    app_ui_set_read_only(fixture_mode || twitch_status().read_only);
     app_ui_set_moderation_capabilities(fixture_mode?forearm::ModerationCapabilities{}:twitch_moderation_capabilities());
     TwitchEvent e;
     for (unsigned i=0;i<12 && twitch_next_event(e);++i) {
@@ -476,8 +512,10 @@ void network_events() {
                 {
                     app_ui_set_demo(false);AppUiEmote emotes[8]{};
                     unsigned count=std::min<unsigned>(e.emote_count,8);
-                    for(unsigned j=0;j<count;++j)emotes[j]={e.emotes[j].id,e.emotes[j].text};
-                    app_ui_append_emotes(e.channel_id,e.message_id,e.user_id,e.display_name,e.text,emotes,count,esp_timer_get_time()/1000);
+                    for(unsigned j=0;j<count;++j)emotes[j]={e.emotes[j].id,e.emotes[j].text,
+                        e.emotes[j].byte_offset,e.emotes[j].byte_length,e.emotes[j].position_valid};
+                    app_ui_append_emotes(e.channel_id,e.message_id,e.user_id,e.display_name,e.text,emotes,count,
+                                        esp_timer_get_time()/1000,e.user_login);
                     if(e.moderation_metadata_valid)
                         app_ui_set_message_moderation_metadata(e.channel_id,e.message_id,e.source_channel_id,e.source_message_id,e.moderator);
                     break;

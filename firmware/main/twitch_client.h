@@ -13,6 +13,8 @@ enum class TwitchEventKind : std::uint8_t {
 struct TwitchEmote {
     char id[65]{};
     char text[65]{};
+    std::uint16_t byte_offset = 0, byte_length = 0;
+    bool position_valid = false;
 };
 
 struct TwitchEvent {
@@ -22,7 +24,8 @@ struct TwitchEvent {
     char user_id[33]{};
     char source_channel_id[33]{};
     char source_message_id[65]{};
-    char display_name[65]{};
+    char display_name[101]{};
+    char user_login[26]{};
     char text[2049]{};
     char verification_url[512]{};
     char user_code[32]{};
@@ -42,6 +45,7 @@ struct TwitchStatus {
     bool authenticated = false;
     bool chat_connected = false;
     bool login_pending = false;
+    bool read_only = false;
     std::uint32_t received_messages = 0;
     std::uint32_t dropped_events = 0;
     std::uint32_t reconnects = 0;
@@ -72,6 +76,9 @@ bool twitch_start();
 // Wi-Fi secrets are persisted in the local NVS configuration, never emitted.
 bool twitch_set_config(const char* ssid, const char* password,
                        const char* public_client_id, const char* channel);
+// Queue only a target/profile; saved Wi-Fi, Client ID and tokens remain owned
+// by the worker. A read-only profile denies mutations despite broader grants.
+bool twitch_watch_channel(const char* channel, bool read_only = true);
 void twitch_request_login();
 void twitch_logout();
 bool twitch_next_event(TwitchEvent& event, std::uint32_t timeout_ms = 0);

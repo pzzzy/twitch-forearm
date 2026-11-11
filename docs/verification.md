@@ -1,35 +1,94 @@
-# Native application verification — November 10, 2026
+# Native application verification — historical snapshot, November 10, 2026
 
-## Current beta development status
+## Evidence scope
 
-The 0.4.0-beta.1 hardware-beta candidate now implements guarded Delete,
-30/60/600-second Timeout, Ban and separately confirmed End timeout/Unban.
-Actual-LVGL host tests exercise fresh-contact arming, distinct confirmation
-positions, drag/doubletap/held-contact rejection, target stability through Back,
-600 arrivals/history eviction and a later selection, permission/session changes,
-protected/shared-source identities, success-only Undo and unknown/no-auto-retry.
-Those callbacks are fake network transport; these tests send no live action.
+This source document preserves development results and failures at the snapshot
+date. It is not a live completion dashboard. For a downloadable hardware beta,
+the release-attached qualification summary and notes identify the tested source
+commit, application/image hashes, measurements and evidence scope. Those
+identities must match the package manifest. An outcome document added later must
+not silently change the source identity of an already tested binary.
 
-The current source pins ESP-IDF 5.3.6 (commit 79e3454c68248bd7d881721c9b2e94561378a8ce)
-and Mbed TLS 3.6.7. The [dependency review](dependency-review.md) covers all 26
-published ESP-IDF advisories, including the explicit DNS single-address
-workaround, plus LVGL/WebSocket and host/font-tool scans. Host requirements are
-PySerial 3.5 and Pillow 13.0.0. The exact-image license/input audit exists and must
-pass again after the final beta build. Public release and hosted-CI gates remain
-separate from these local results.
+The implementation includes guarded moderation, saved read-only profiles,
+positioned inline static emotes and complete sender-name/login fallback. Host
+tests cover those contracts with fake action callbacks; they do not send live
+moderation. A Twitch acknowledgement, diagnostic injection and physical finger
+interaction are separate kinds of evidence.
 
-Authorized live moderation and a 20-point physical touch check now have candidate
-device evidence, recorded below. The exact final image must repeat its relevant
-checks and complete the one-hour active soak. A Twitch acknowledgement, an
-injected contact and a physical finger interaction remain distinct evidence.
+ESP-IDF 5.3.6 (commit `79e3454c68248bd7d881721c9b2e94561378a8ce`), Mbed TLS 3.6.7,
+LVGL 8.4.0 and WebSocket client 1.8.0 form the pinned baseline. The
+[dependency review](dependency-review.md) records advisory applicability and the
+DNS workaround. Build, hosted-CI, license and hardware results must be bound to
+their actual source/image rather than inferred from these pins.
 
 Battery, charging, temperature against skin and forearm mounting are
-**unqualified**; the agreed hardware-beta scope discloses these limits rather
-than representing a finished wearable.
+**unqualified** in the agreed hardware-beta scope.
+
+## Historical source `54c1169c`: useful evidence, rejected soak
+
+The immutable baseline is source
+`54c1169cb0695e5afe07b47466168f035ea056d7`, application image SHA-256
+`321d89ee9d381fdd71230125b3ee45159644cffd34123f6c2915d907faa613a6`.
+Its recorded results are separate from subsequent touch/profile/rendering changes:
+
+| Baseline check | Result and boundary |
+| --- | --- |
+| Live API actions | Delete, Ban, Unban, 60-second Timeout and End timeout: **5 requests, 5 acknowledgements, 0 unknown outcomes**. The authorized test ban and timeout were cleaned up. Identities remain private. |
+| Hosted CI | **All three jobs green** in [workflow run 42914098263](https://github.com/pzzzy/twitch-forearm/actions/runs/42914098263). This does not qualify later commits. |
+| Reproducibility | Four flash images were byte-identical across clean source/build roots with the same pinned configuration; the application ELF also matched. |
+| Warm-cache scrolling | Two 500-frame runs: **30.089 / 30.178 fps**, UI-frame p95 **30,784 / 30,766 µs**, with TLS connected. These are warm-scroll results, not live 500-byte-arrival or physical-touch results. |
+| Active soak | **Failed** at reported active elapsed **3,021.741 seconds** (about 50 minutes), after 51 load/input pulses and five recovery pairs. One touch-transport error was recorded during the fifth Wi-Fi recovery. The one-hour zero-error gate did not pass. |
+
+The first error appears between active-soak 3,013.406 and 3,014.549 seconds,
+after IP recovery and during revalidation/WebSocket startup. The original
+baseline did not record the I2C operation/errno needed to prove its cause.
+Its cumulative sample-gap maximum predated the fault and cannot timestamp it.
+Green CI, API acknowledgements and reproducible images did **not** override this
+hardware failure; this baseline was not accepted as the release image.
+
+## Later touch-transport and integration snapshot
+
+Follow-up development added cache-safe I2C interrupt setup and operation-level
+diagnostics. An IRAM-only stress run failed on the fourth recovery cycle; a
+bounded-cadence variant then failed on the twenty-fifth. Those failures were not
+reclassified as passes. The later Core1 sampler variant passed **30 radio-recovery
+stress cycles**. That is a transport stress result, not a completed one-hour soak
+or qualification of a subsequently changed image.
+
+At this snapshot, saved read-only monitoring had received actual chat with no
+moderation requests. The later profile, inline-emote and sender-name changes
+had portable-core and real-LVGL host coverage. Their exact-image fixtures,
+physical behavior, dense-arrival/performance, genuine one-hour active soak,
+hosted CI and artifact audit must be recorded with the release being qualified.
+The five earlier API actions remain historical; they were not repeated in a
+watched read-only room. Release-attached results supersede this snapshot only
+for the matching recorded image, without rewriting earlier failures.
+
+### Uncommitted instruction-cache comparison
+
+A later development comparison changed instruction cache from 16 KiB to 32 KiB,
+retaining 32 KiB data cache and 64-byte data-cache lines. Two dense-scrolling
+runs on the uncommitted 32 KiB variant measured **30.511 / 30.480 completed
+frames/s**, with UI-frame p95 **30.086 / 31.269 ms**, versus approximately 27 fps
+with 16 KiB instruction cache. These are positive workload-specific development
+measurements, not final source/image qualification or physical-touch latency.
+
+The subsequent memory change puts the 512-record layout array in one lifetime
+PSRAM allocation (12 KiB on Xtensa), keeping visible-row/cache metadata internal.
+Its combined-image performance, memory headroom and long-run results belong to
+the matching release evidence; they are not inferred from the preceding cache
+comparison. The public benchmark's `passed` status means its workload and safety
+checks completed, not that its measured frame rate met a release target.
+
+## Earlier candidate records
+
+The following candidate and v0.3.x records retain their original workload and
+revision boundaries. They are historical measurements, not claims about the
+eventual released image.
 
 ### Preliminary beta warm-scroll performance
 
-An uncommitted development candidate on the reference unit now meets the
+An earlier uncommitted development candidate on the reference unit met the
 numerical warm-scroll target. Its configuration uses 32 KiB/eight-way data cache
 with 64-byte lines, asynchronous full-frame transport, row-sprite caching on,
 opaque-background culling on and staged transport-copy mode off. The generated
@@ -71,7 +130,7 @@ The earlier candidate received Twitch acknowledgements for Delete and a
 already expired; the UI reported **Failed**, without claiming an acknowledgement
 or automatically replaying the action.
 
-On the current 64-byte-cache-line candidate, the following explicit actions were
+On that earlier 64-byte-cache-line candidate, the following explicit actions were
 acknowledged by Twitch in an owned test channel against an authorized disposable
 account. Account, channel, user and message identities are redacted publicly.
 
@@ -130,9 +189,9 @@ malformed replies, 0 timeouts and 0 `usb_reply_errors`**. Of the 120 status samp
 was online. No additional I2C errors were observed. No moderation action was
 replayed to obtain these results.
 
-The full smoke check of this newer candidate is active. The final native commit,
-clean reproducibility/CI checks and genuine one-hour active soak remain pending;
-these candidate observations do not substitute for the exact final image's gates.
+At that stage, the smoke/reproducibility/CI/one-hour checks had not completed.
+Later source-specific results are recorded above; these earlier observations do
+not substitute for another image's qualification.
 
 ### Candidate recovery and refresh smoke
 

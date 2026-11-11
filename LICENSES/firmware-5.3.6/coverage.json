@@ -136,7 +136,7 @@
   ],
   "inputs": {
     "build/bootloader/config/sdkconfig.h": {
-      "sha256": "821dd9c56f309112662f2c549d3055b98d45e5bbf80776055c80fd3c508dc2d4",
+      "sha256": "79abdeffe6be7ee08d302b63fd9bf0e5718d8844d0e466842ee284ec01426b0e",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -154,7 +154,7 @@
       "basis": "ESP-IDF generated configuration/empty ELF translation unit"
     },
     "build/config/sdkconfig.h": {
-      "sha256": "2d62ed15888fa0ef68b61a6cd2926f4d42a3cf96c64c00e3788c70a3b826ddb4",
+      "sha256": "027626ff8a2de475858f44d2027eed8ee3aa3f47d6fba878d830cf8e9915d338",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -184,7 +184,16 @@
       "basis": "Generated public Mozilla CA data and Espressif supplement; exact sources supplied"
     },
     "project/core/include/forearm/chat_store.h": {
-      "sha256": "35c5f8821c4978d0aab39208ad1d3254be75a5d43c485bdd69987be060b9647e",
+      "sha256": "a74e8476dda836f1e9543296050c7f8b07ab526d2e9cd28d588daaff99f3a1d9",
+      "license": "Apache-2.0",
+      "license_files": [
+        "LICENSES/Apache-2.0.txt",
+        "LICENSES/firmware-5.3.6/linked-source-notices.txt"
+      ],
+      "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
+    },
+    "project/core/include/forearm/device_config.h": {
+      "sha256": "e2876851d915368cf21fb945083f84b198356971c09f6ea85b64ff2fd11a73be",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -194,6 +203,15 @@
     },
     "project/core/include/forearm/device_login.h": {
       "sha256": "cb7da00c36f19f7dae67f7770dbf01f6e2963664f25e491d24d1b4bee2cc4c56",
+      "license": "Apache-2.0",
+      "license_files": [
+        "LICENSES/Apache-2.0.txt",
+        "LICENSES/firmware-5.3.6/linked-source-notices.txt"
+      ],
+      "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
+    },
+    "project/core/include/forearm/emote_fragments.h": {
+      "sha256": "e6bb9585bef7cbf54323bf1009cb70450195ec768163222b1a40e122e4c683d0",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -211,7 +229,7 @@
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
     "project/core/include/forearm/moderation.h": {
-      "sha256": "a5b79a41780681020393e80a87d17e196dec93ec5649a2b311cc7d4d991d4807",
+      "sha256": "0c6185d27ea5bd2b3645532471739ff9aecd6f472763c76100d91e0514ea2561",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -231,7 +249,7 @@
       "basis": "Explicit SPDX; select Apache alternative for Mbed TLS"
     },
     "project/firmware/components/forearm_fonts/forearm_fonts.c": {
-      "sha256": "5bf0877f6ac35a325e3eee44dea378c52d3e9e22d5751e9278debff328fa6a21",
+      "sha256": "909381868c43014ab1d9425e2e76278a43ed8f2448abd0d2e3f6e0987ad05ce3",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -251,7 +269,7 @@
       "basis": "Explicit SPDX; select Apache alternative for Mbed TLS"
     },
     "project/firmware/components/forearm_fonts/include/forearm_fonts.h": {
-      "sha256": "b14884dc46eeb78e65182cf25763dae27fa1e2781215eda9d3a753dc6d810605",
+      "sha256": "6261b2ae218417553b353683b2cc8c4d5348c6a440c1287a5d775e68a6654aa4",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -313,6 +331,15 @@
       ],
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
+    "project/firmware/components/forearm_panel/include/touch_sample_cadence.h": {
+      "sha256": "24d5fc82c5880d67971a4253c12918c4898f259b5fb8cf6bb786f888b83ef471",
+      "license": "Apache-2.0",
+      "license_files": [
+        "LICENSES/Apache-2.0.txt",
+        "LICENSES/firmware-5.3.6/linked-source-notices.txt"
+      ],
+      "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
+    },
     "project/firmware/components/forearm_panel/jc3248_init.c": {
       "sha256": "a70e87dda39f95f349943efb0761487b12fed0c9c65eb1354c1c856774eae892",
       "license": "CC0-1.0",
@@ -323,7 +350,7 @@
       "basis": "Explicit SPDX; select Apache alternative for Mbed TLS"
     },
     "project/firmware/main/app_ui.cpp": {
-      "sha256": "6f57746c49cc707d015a09d2e4e31f131970722a103d4935b1f5e7f6bdd13f66",
+      "sha256": "6f49ddd28899cc73ed8f8a8e8e84a7f059bc4c2b430bc4de4264ed82fc45fdce",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -332,7 +359,7 @@
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
     "project/firmware/main/app_ui.h": {
-      "sha256": "0be359361c68048efd53dc61af9e766ba700ca725af50d393bb7c5e73525ae80",
+      "sha256": "5b40ca3724500cd7a8f96e3826698597ba67198b5abae295920831d3c1d745d0",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -341,7 +368,7 @@
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
     "project/firmware/main/board_display.cpp": {
-      "sha256": "3b8b8670f2ba26c98cbf17cc2f48c4b3cb7596616b8a7247af4a5999d73a5d8d",
+      "sha256": "ee86836b674808a94e76af9a4f236e90163c5f633dae8464e3f77a154784f913",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -350,7 +377,7 @@
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
     "project/firmware/main/board_display.h": {
-      "sha256": "4bf0c83aeb550654d1ad7849287946b2f9c92829222bb523e546b4bde9d22d4a",
+      "sha256": "03236fd9a0bd41ca87ba2c394e407e73f19f71285c3f44ad2da7dd384e401140",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -386,7 +413,7 @@
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
     "project/firmware/main/main.cpp": {
-      "sha256": "b8bfa25b1dfef5b005873dbbccf20f75cdd33b667b0d446a0d8d5d3fbc5fad51",
+      "sha256": "b2c15d899816fe834784cc15b7f9096af29db6f5407ba33b9f2ee1ea607dda40",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -395,7 +422,7 @@
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
     "project/firmware/main/twitch_client.cpp": {
-      "sha256": "67694016da1394448ac56d7011569a0df63e6e17ec4b019f04091354e456fcf3",
+      "sha256": "5847f984ca2e01b8f429578caf731e16644700a0d5101759fcbf958de19f4f7e",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -404,7 +431,7 @@
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
     "project/firmware/main/twitch_client.h": {
-      "sha256": "b8e2bb21f3cb957e6c7b722d279d1b599875615003a9f3910159ad5579201240",
+      "sha256": "2c43703542d49f7414b16bffee5acdc4af81c03d21c222cf60010d1e7f0c2044",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -18754,19 +18781,6 @@
       ]
     }
   },
-  "sdk_commit": "79e3454c68248bd7d881721c9b2e94561378a8ce",
-  "review_notes": [
-    "SPDX expressions checked; Mbed TLS Apache and WPA BSD alternatives explicitly selected.",
-    "Original SDK default Apache is used only after per-file exception checks; all actual copyright/license comments retained.",
-    "Legacy LVGL fonts, Mozilla CA source, LLVM PSTL, TLSF, Xtensa and Newlib/GCC runtime exceptions handled separately.",
-    "Prebuilt SDK/toolchain archives are approved by complete archive hash, not name alone.",
-    "This is a baseline review, not approval of a particular release image; final audit must pass freshness and all input hashes.",
-    "Final beta64 review: two added original project headers (device_login.h and touch_frame_latency.h); original UI/network/board/core updates and generated configuration reviewed. No external SDK/toolchain source or prebuilt input hash changed. Build freshness checks passed before promotion.",
-    "Profile: ESP-IDF5.3.6 default configuration,64-byte data-cache line, native row sprites and backdrop culling enabled, original opaque fallbacks retained. Final image hashes still require the exact audit after every rebuild.",
-    "Final native input review: app_ui.cpp settings hit-target fix and main.cpp bounded serialized USB replies are original Apache-2.0 code. The only added external input is the unmodified GCC13.2 cstdarg forwarding header; its GPL-3.0-or-later notice and Runtime Library Exception3.1 are explicitly retained. All previously reviewed external input hashes and generated configuration remain unchanged. Build freshness checks passed.",
-    "Final USB deadline/OOM counter and refresh diagnostic latch review: only original Apache-2.0 main.cpp and twitch_client.cpp/.h changed, with no new input or notice change; build freshness checks passed.",
-    "Five exact Linux-amd64 runtime/header hash variants reviewed against the official SDK-manifest-pinned toolchain package. Original macOS hashes remain primary; no directory, filename-prefix or arbitrary-package approval is used."
-  ],
   "variant_provenance": {
     "xtensa-esp-elf-esp-13.2.0_20250707-linux-amd64": {
       "review_status": "approved",
@@ -18784,5 +18798,21 @@
         "Official Linux GCC GPL3, GCC Runtime Library Exception3.1, Newlib COPYING.NEWLIB, Newlib COPYING.LIBGLOSS and LLVM/PSTL full license files are byte-identical to the distributed canonical texts."
       ]
     }
-  }
+  },
+  "sdk_commit": "79e3454c68248bd7d881721c9b2e94561378a8ce",
+  "review_notes": [
+    "SPDX expressions checked; Mbed TLS Apache and WPA BSD alternatives explicitly selected.",
+    "Original SDK default Apache is used only after per-file exception checks; all actual copyright/license comments retained.",
+    "Legacy LVGL fonts, Mozilla CA source, LLVM PSTL, TLSF, Xtensa and Newlib/GCC runtime exceptions handled separately.",
+    "Prebuilt SDK/toolchain archives are approved by complete archive hash, not name alone.",
+    "This is a baseline review, not approval of a particular release image; final audit must pass freshness and all input hashes.",
+    "Final beta64 review: two added original project headers (device_login.h and touch_frame_latency.h); original UI/network/board/core updates and generated configuration reviewed. No external SDK/toolchain source or prebuilt input hash changed. Build freshness checks passed before promotion.",
+    "Profile: ESP-IDF5.3.6 default configuration,64-byte data-cache line, native row sprites and backdrop culling enabled, original opaque fallbacks retained. Final image hashes still require the exact audit after every rebuild.",
+    "Final native input review: app_ui.cpp settings hit-target fix and main.cpp bounded serialized USB replies are original Apache-2.0 code. The only added external input is the unmodified GCC13.2 cstdarg forwarding header; its GPL-3.0-or-later notice and Runtime Library Exception3.1 are explicitly retained. All previously reviewed external input hashes and generated configuration remain unchanged. Build freshness checks passed.",
+    "Final USB deadline/OOM counter and refresh diagnostic latch review: only original Apache-2.0 main.cpp and twitch_client.cpp/.h changed, with no new input or notice change; build freshness checks passed.",
+    "Five exact Linux-amd64 runtime/header hash variants reviewed against the official SDK-manifest-pinned toolchain package. Original macOS hashes remain primary; no directory, filename-prefix or arbitrary-package approval is used.",
+    "Inline/read-only/touch-cadence review: three added original Apache-2.0 headers (device_config.h, emote_fragments.h and touch_sample_cadence.h); original core/UI/network/BSP/font-glue updates reviewed. Generated font tables/assets, generated configuration, all external SDK/toolchain sources and prebuilt hashes are unchanged. Exact Linux variants and their provenance are retained. No license/comment block or canonical full-text change; build freshness checks passed. This license review does not qualify hardware reliability or approve a release.",
+    "Author-cache/drag-feedback review: only original Apache-2.0 app_ui.cpp/.h and main.cpp changed. The bounded author bitmap cache, native-glyph gutter and conservative backdrop guards, drag-state handling, and diagnostic bridge introduce no new third-party input. All 2001 input paths and every external SDK/toolchain/prebuilt/generated-configuration hash, canonical license evidence and 439 notice blocks are unchanged. Five exact reviewed Linux variants and provenance are retained. Build freshness checks passed; hardware performance and reliability require separate qualification.",
+    "Instruction-cache32/PSRAM-layout review: the only changed generated inputs are application and bootloader sdkconfig.h, each replacing the 16KiB instruction-cache selection/size with 32KiB; all other configuration bytes are unchanged. Original Apache-2.0 app_ui.cpp/.h and main.cpp add profiling and move the value-initialized bounded layout table to PSRAM; the ineffective body-alignment experiment was removed. All 2001 input paths, external SDK/toolchain source and prebuilt hashes, canonical license evidence and 439 notice blocks are unchanged. Five exact Linux variants, provenance and prior review notes are preserved. Build freshness checks passed; this catalog does not itself qualify device performance/reliability or approve a release."
+  ]
 }

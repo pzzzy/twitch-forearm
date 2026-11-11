@@ -74,6 +74,18 @@ struct BoardStats {
     uint32_t te_wait_timeouts = 0;
     uint32_t touch_polls = 0;
     uint32_t touch_errors = 0;
+    // Every failed transaction remains counted; diagnostics never retry/hide
+    // it. Operation 1 = AXS command write, 2 = eight-byte report read.
+    uint32_t touch_write_errors = 0, touch_read_errors = 0;
+    uint32_t touch_timeout_errors = 0, touch_fail_errors = 0, touch_other_errors = 0;
+    int32_t touch_last_error_code = 0;
+    uint32_t touch_last_error_operation = 0;
+    uint64_t touch_last_error_at_us = 0;
+    uint32_t touch_last_error_duration_us = 0, touch_last_error_cycle_us = 0;
+    uint32_t touch_last_error_poll_gap_us = 0;
+    uint32_t touch_write_us_last = 0, touch_write_us_max = 0;
+    uint32_t touch_read_us_last = 0, touch_read_us_max = 0;
+    bool touch_i2c_iram = false;
     uint32_t touch_contacts = 0;  // Physical rising contacts, excludes injection.
     uint32_t touch_pressed_samples = 0;
     uint32_t injected_samples = 0;
@@ -98,7 +110,10 @@ struct BoardStats {
     uint32_t touch_queue_overflows = 0;
     uint32_t touch_queue_depth = 0;
     uint32_t touch_queue_peak = 0;
+    uint32_t touch_sample_gap_min_us = 0; // Actual starts; initial zero is excluded.
     uint32_t touch_sample_gap_max_us = 0;
+    uint32_t touch_fast_polls = 0; // Noninitial actual start gaps below 8,000 us.
+    int32_t touch_sampler_core = -1; // Runtime affinity observation; -1 before first poll.
     bool touch_sampler_running = false;
     uint8_t last_touch_packet[8]{};
     uint8_t last_contact_packet[8]{};

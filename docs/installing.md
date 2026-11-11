@@ -2,7 +2,7 @@
 
 This package targets **JC3248W535, ESP32-S3, 16 MB flash / 8 MB PSRAM, 320 × 480 portrait**. Match the actual board to the project's hardware reference before flashing. Purchase reference: https://www.aliexpress.us/item/3256807380017698.html. Variants and other ESP32 display boards are not interchangeable.
 
-This is a hardware beta. Battery, charging, skin temperature, runtime and forearm mounting are **not qualified**. Use USB power for initial testing. Read the version's release notes for measured performance and known limits. The app does not mount or format microSD and does not program security eFuses.
+This is a hardware beta. Battery, charging, skin temperature, runtime and forearm mounting are **not qualified**. Use USB power for initial testing. Read the version's release notes and attached `qualification-summary.json` for measured performance and known limits; its source commit and image hash must match the package manifest. Historical measurements do not qualify another image. The app does not mount or format microSD and does not program security eFuses.
 
 ## Verify and prepare
 
@@ -32,7 +32,7 @@ That erase clears the new project configuration/token/PHY/OTA selector area; it 
 
 ## Updating an existing Forearm Chat device
 
-For this unchanged partition layout, an application-only update preserves Wi-Fi and saved Twitch login:
+For this unchanged partition layout, an application-only update preserves Wi-Fi, saved Twitch login and the channel/read-only profile:
 
 ```sh
 python -m esptool --chip esp32s3 --port "$FOREARM_PORT" write_flash --flash_mode dio --flash_size 16MB --flash_freq 80m 0x30000 images/forearm_chat.bin
@@ -50,7 +50,16 @@ python tools/device.py --port "$FOREARM_PORT" setup
 
 Open the printed loopback URL. Enter 2.4 GHz Wi-Fi/hotspot credentials, your own Public Twitch Client ID and channel. Stop the helper after setup. Wi-Fi credentials and OAuth tokens are stored only on the device in unencrypted flash. Use the displayed Twitch link/QR to authorize; no Twitch password or Client Secret belongs in the form or terminal.
 
-Check readable output and touch alignment, pause, scroll, Go live and message → Back before use. Moderation must show the correct selected identity and a separate confirmation. Use an owned disposable account for tests and undo any test ban/timeout. Do not treat an ambiguous network result as confirmed failure or resend it automatically.
+For viewing-only use, select the saved read-only profile before starting a new login. Replace `CHANNEL_LOGIN` with the desired channel's ASCII login:
+
+```sh
+python tools/device.py --port "$FOREARM_PORT" command '{"cmd":"watch","channel":"CHANNEL_LOGIN","read_only":true}'
+python tools/device.py --port "$FOREARM_PORT" status
+```
+
+The same command switches an already paired device without entering Wi-Fi/client settings again or discarding its token pair. Check status for the resulting channel/profile and connection. A read-only profile blocks moderation even with older broad token grants and requests only chat-read permission on future login. It does not revoke the older Twitch grant. Changing rooms clears the previous room's RAM history; a same-room reconnect preserves it.
+
+Check readable output, complete sender names/login fallback, inline emotes, touch alignment, pause, scroll, Go live and message → Back before use. Read-only settings must remain visibly read only with disabled actions. A moderation-enabled profile must show the correct selected identity and separate confirmation; live action tests require an explicitly authorized owned/disposable target and complete cleanup. A watched read-only room is not a mutation-test target. Do not treat an ambiguous network result as confirmed failure or resend it automatically.
 
 ## Recovery
 

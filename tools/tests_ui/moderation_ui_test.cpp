@@ -12,6 +12,7 @@ static std::int64_t fake_us = 0;
 static lv_indev_state_t pointer_state = LV_INDEV_STATE_REL;
 static lv_point_t pointer_point{};
 static unsigned submitted = 0;
+static unsigned login_requests = 0, upgrade_requests = 0;
 static forearm::ModerationRequest sent{};
 static forearm::ModerationCapabilities caps{};
 
@@ -121,8 +122,10 @@ int main() {
         data->point = pointer_point;
         data->state = pointer_state;
     };
-    lv_indev_drv_register(&input);
+    auto *pointer = lv_indev_drv_register(&input);
     app_ui_init();
+    assert(app_ui_stats().read_only); // Fail closed until the profile is applied.
+    app_ui_set_read_only(false);
     app_ui_set_authenticated("Owner", "room");
     caps.authenticated = caps.online = caps.role_verified = caps.can_delete = caps.can_ban = true;
     caps.generation = 7;
@@ -134,6 +137,8 @@ int main() {
         sent = request;
         return true;
     });
+    app_ui_set_login_callback([] { ++login_requests; });
+    app_ui_set_moderation_login_callback([] { ++upgrade_requests; });
 
     // Unknown, shared-chat and protected identities never enable controls.
     fresh_message("unknown", "Target", "300", "100", false);
@@ -369,6 +374,41 @@ int main() {
     const std::string long_message(500, 'W');
     assert(app_ui_append("100", "long", "300", "Long viewer", long_message.c_str()));
     app_ui_set_message_moderation_metadata("100", "long", "100", "long", false);
+    app_ui_go_live(); pump(500);
+    auto *long_row = lv_obj_get_parent(find_label(lv_scr_act(), "Long viewer"));
+    auto *chat_object = lv_obj_get_parent(lv_obj_get_parent(long_row));
+    const auto drag_taps = app_ui_stats().taps;
+    // A normal contact and small jitter keep the existing opaque tap feedback.
+    touch(150, 150, LV_INDEV_STATE_PR);
+    touch(155, 155, LV_INDEV_STATE_PR);
+    assert(lv_obj_has_state(long_row, LV_STATE_PRESSED));
+    assert(lv_obj_get_style_bg_opa(long_row, LV_PART_MAIN) == LV_OPA_COVER);
+    // Horizontal movement cancels the tap even though this vertical-only list
+    // never starts a native scroll. Release must not open the message sheet.
+    touch(164, 155, LV_INDEV_STATE_PR);
+    assert(!lv_obj_has_state(long_row, LV_STATE_PRESSED));
+    assert(lv_obj_get_style_bg_opa(long_row, LV_PART_MAIN) == LV_OPA_TRANSP);
+    assert(lv_indev_get_scroll_obj(pointer) == nullptr);
+    touch(164, 155, LV_INDEV_STATE_REL); pump(500);
+    assert(!app_ui_stats().selection_visible && app_ui_stats().taps == drag_taps);
+    // A new small-jitter tap still selects normally after the cancelled drag.
+    touch(150, 150, LV_INDEV_STATE_PR); touch(155, 155, LV_INDEV_STATE_PR);
+    assert(lv_obj_has_state(long_row, LV_STATE_PRESSED));
+    touch(155, 155, LV_INDEV_STATE_REL); pump(500);
+    assert(app_ui_stats().selection_visible && app_ui_stats().taps == drag_taps + 1);
+    back_to_chat();
+    // Native scrolling starts below our 12px tap threshold. That independent
+    // SCROLL_BEGIN path must clear feedback without resetting input capture.
+    const int native_scroll_movement = pointer->driver->scroll_limit + 1;
+    assert(native_scroll_movement <= 12);
+    const auto previous_scrolls = app_ui_stats().scrolls;
+    touch(150, 150, LV_INDEV_STATE_PR);
+    assert(lv_obj_has_state(long_row, LV_STATE_PRESSED));
+    touch(150, 150 + native_scroll_movement, LV_INDEV_STATE_PR);
+    assert(lv_indev_get_scroll_obj(pointer) == chat_object && app_ui_stats().scrolls > previous_scrolls);
+    assert(!lv_obj_has_state(long_row, LV_STATE_PRESSED));
+    touch(150, 150 + native_scroll_movement, LV_INDEV_STATE_REL); pump(500);
+    assert(!app_ui_stats().selection_visible && app_ui_stats().taps == drag_taps + 1);
     app_ui_go_live(); pump(500); app_ui_scroll(-300); pump(64);
     const auto old_scroll = app_ui_stats().scroll_y;
     assert(old_scroll > 0);
@@ -474,6 +514,117 @@ int main() {
     tap(247, 36); pump(500); // One pixel outside the target still belongs to chat.
     assert(app_ui_stats().selection_visible && !find_label(lv_scr_act(), "FOREARM CHAT"));
     back_to_chat(); app_ui_go_live(); pump(64);
+
+    // A read-only profile overrides a fully granted, verified moderator account.
+    // Switching it also updates an already open settings/selection view.
+    fresh_message("read-only-full-grants"); select_message();
+    assert(!lv_obj_has_state(button_named("Delete"), LV_STATE_DISABLED));
+    assert(!lv_obj_has_state(button_named("Ban"), LV_STATE_DISABLED));
+    auto count = submitted;
+    app_ui_set_read_only(true); pump(500);
+    assert(app_ui_stats().read_only);
+    assert(find_label(lv_scr_act(), "Read-only profile. Moderation is disabled."));
+    for (const auto *caption : {"Delete", "Timeout", "Ban"}) {
+        assert(lv_obj_has_state(button_named(caption), LV_STATE_DISABLED));
+        tap_button(caption); assert(submitted == count);
+    }
+    back_to_chat(); tap(284, 36); pump(64);
+    assert(find_label(lv_scr_act(), "READ ONLY"));
+    assert(!find_label(lv_scr_act(), "Enable moderation"));
+    assert(find_label(lv_scr_act(), "Reconnect Twitch"));
+    caps.can_delete = caps.can_ban = false;
+    app_ui_set_moderation_capabilities(caps); pump(500);
+    assert(find_label(lv_scr_act(), "READ ONLY") && !find_label(lv_scr_act(), "Enable moderation"));
+    app_ui_set_read_only(false); pump(500);
+    assert(find_label(lv_scr_act(), "Enable moderation"));
+    auto upgrade_point = center(button_named("Enable moderation"));
+    touch(upgrade_point.x, upgrade_point.y, LV_INDEV_STATE_PR);
+    app_ui_set_read_only(true); pump(500);
+    touch(upgrade_point.x, upgrade_point.y, LV_INDEV_STATE_REL); pump(500);
+    assert(!upgrade_requests && !login_requests);
+    assert(find_label(lv_scr_act(), "READ ONLY") && !find_label(lv_scr_act(), "Enable moderation"));
+    tap_button("Reconnect Twitch"); pump(500);
+    assert(login_requests == 1 && !upgrade_requests);
+    tap(284, 36); pump(64);
+    tap_button(LV_SYMBOL_LEFT "  Back"); pump(500);
+    caps.can_delete = caps.can_ban = true;
+    app_ui_set_moderation_capabilities(caps);
+
+    // The capability guard independently denies a stale setter value.
+    app_ui_set_read_only(false);
+    caps.read_only = true; app_ui_set_moderation_capabilities(caps); pump(500);
+    fresh_message("read-only-capability"); select_message();
+    assert(app_ui_stats().read_only && lv_obj_has_state(button_named("Ban"), LV_STATE_DISABLED));
+    tap_button("Ban"); assert(submitted == count);
+    back_to_chat();
+    caps.read_only = false; app_ui_set_moderation_capabilities(caps); pump(500);
+
+    // Profile toggles consume a held final contact. Returning to write mode
+    // never resurrects an old confirmation, even with unchanged full grants.
+    fresh_message("read-only-held-confirm"); select_message(); confirm_action("Ban");
+    auto held = center(button_named("Ban user"));
+    touch(held.x, held.y, LV_INDEV_STATE_PR);
+    app_ui_set_read_only(true); pump(500);
+    touch(held.x, held.y, LV_INDEV_STATE_REL); pump(500);
+    assert(submitted == count && lv_obj_has_state(button_named("Ban user"), LV_STATE_DISABLED));
+    app_ui_set_read_only(false); pump(500);
+    assert(lv_obj_has_state(button_named("Ban user"), LV_STATE_DISABLED));
+    tap_button("Ban user"); assert(submitted == count);
+    tap_button("Cancel"); pump(500);
+    assert(lv_obj_has_state(button_named("Ban"), LV_STATE_DISABLED));
+    back_to_chat();
+
+    // An acknowledged Undo target also belongs to its original profile epoch.
+    fresh_message("read-only-undo"); select_message(); confirm_action("Ban"); tap_button("Ban user");
+    result(forearm::ModerationState::Succeeded, "Synthetic acknowledgement before profile change.");
+    count = submitted;
+    assert(!lv_obj_has_state(button_named("Unban user"), LV_STATE_DISABLED));
+    held = center(button_named("Unban user"));
+    touch(held.x, held.y, LV_INDEV_STATE_PR);
+    app_ui_set_read_only(true); pump(500);
+    touch(held.x, held.y, LV_INDEV_STATE_REL); pump(500);
+    assert(submitted == count && lv_obj_has_state(button_named("Unban user"), LV_STATE_DISABLED));
+    app_ui_set_read_only(false); pump(500);
+    assert(lv_obj_has_state(button_named("Unban user"), LV_STATE_DISABLED));
+    tap_button("Unban user"); assert(submitted == count);
+    back_to_chat();
+    fresh_message("read-only-restore-confirm"); select_message(); confirm_action("Ban"); tap_button("Ban user");
+    result(forearm::ModerationState::Succeeded, "Synthetic acknowledgement for explicit restoration.");
+    tap_button("Unban user"); pump(500);
+    count = submitted; held = center(button_named("Restore chat access"));
+    touch(held.x, held.y, LV_INDEV_STATE_PR);
+    app_ui_set_read_only(true); pump(500);
+    touch(held.x, held.y, LV_INDEV_STATE_REL); pump(500);
+    assert(submitted == count && lv_obj_has_state(button_named("Restore chat access"), LV_STATE_DISABLED));
+    app_ui_set_read_only(false); pump(500);
+    tap_button("Restore chat access"); assert(submitted == count);
+    tap_button("Cancel"); pump(500); back_to_chat();
+
+    // Same-room reconnects preserve selected scrollback, independent of case
+    // and a leading '#'. A real room switch clears it and invalidates held UI.
+    fresh_message("same-channel-reconnect"); select_message();
+    const auto before_reconnect = app_ui_stats();
+    app_ui_set_authenticated("Owner", "#ROOM"); pump(500);
+    const auto after_reconnect = app_ui_stats();
+    assert(after_reconnect.retained == before_reconnect.retained &&
+           after_reconnect.selected_sequence == before_reconnect.selected_sequence &&
+           after_reconnect.scroll_y == before_reconnect.scroll_y && after_reconnect.paused);
+    confirm_action("Ban"); held = center(button_named("Ban user"));
+    touch(held.x, held.y, LV_INDEV_STATE_PR);
+    app_ui_set_authenticated("Owner", "other_room"); pump(500);
+    touch(held.x, held.y, LV_INDEV_STATE_REL); pump(500);
+    assert(submitted == count && !app_ui_stats().retained && !app_ui_stats().selection_visible);
+    app_ui_set_authenticated("Owner", "room"); pump(500);
+    fresh_message("channel-switch-pending-undo"); select_message(); confirm_action("Ban"); tap_button("Ban user");
+    count = submitted;
+    app_ui_set_authenticated("Owner", "other_room"); pump(500);
+    assert(!app_ui_stats().retained && app_ui_stats().moderation_pending);
+    result(forearm::ModerationState::Succeeded, "Synthetic acknowledgement for the former room.");
+    assert(lv_obj_has_state(button_named("Unban user"), LV_STATE_DISABLED));
+    tap_button("Unban user"); assert(submitted == count);
+    back_to_chat();
+    std::puts("Read-only profile passed: full grants denied, settings upgrade absent, capability defense, held confirmation/Undo invalidated, no stale-profile callbacks, same-room history retained and changed-room history cleared.");
     std::puts("Floating settings target passed: dense-chat corner/edge taps, unchanged 52px circle, held-contact arrivals, jitter, drag/hold/slide rejection and overlay priority.");
+    std::puts("Drag feedback passed: press/jitter keeps highlight, threshold-only cancellation and native scroll clear it without losing capture, releases never select, and a fresh tap still selects.");
     std::puts("Native LVGL moderation UI passed: guarded contacts, distinct confirmation, drag/doubletap rejection, frozen pending target, permissions, source identity, deletion, stale session, all timeout presets, unknown/no retry, acknowledged-only Undo/Unban, immutable restoration after history eviction/clear/new selection, new request IDs, no held-contact confirmation.");
 }

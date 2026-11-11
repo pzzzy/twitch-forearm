@@ -2,6 +2,8 @@
 // https://dev.twitch.tv/docs/authentication/getting-tokens-oauth/#device-code-grant-flow
 // https://dev.twitch.tv/docs/eventsub/handling-websocket-events/
 #include "twitch_client.h"
+#include "forearm/device_config.h"
+#include "forearm/emote_fragments.h"
 
 #include <algorithm>
 #include <atomic>
@@ -41,13 +43,8 @@ constexpr char kWsUrl[] = "wss://eventsub.wss.twitch.tv/ws?keepalive_timeout_sec
 constexpr std::size_t kMaxJson = 32768;
 constexpr std::size_t kTokenBytes = 2049;
 
-struct Configuration {
-    char ssid[33]{};
-    char password[65]{};
-    char client_id[65]{};
-    char channel[33]{};
-};
-enum class CommandKind { Configure, Login, Logout, Moderate, RefreshTest };
+using Configuration = forearm::DeviceConfiguration;
+enum class CommandKind { Configure, Login, Logout, Moderate, RefreshTest, WatchChannel };
 struct Command {
     CommandKind kind{};
     Configuration config{};
@@ -98,6 +95,7 @@ std::atomic<std::uint32_t> queue_drops{0};
 std::atomic<std::uint32_t> malformed{0};
 std::atomic<bool> http_active{false};
 std::atomic<bool> refresh_test_pending{false};
+std::atomic<bool> read_only_enforced{false};
 std::atomic<bool> force_validation{false};
 std::atomic<std::uint32_t> disconnect_test_ms{0};
 std::atomic<std::uint32_t> wifi_disconnect_test_ms{0};
@@ -199,6 +197,7 @@ void invalidate_moderation(const char* reason) {
     if (++moderation_caps.generation == 0) ++moderation_caps.generation;
     moderation_caps.authenticated = moderation_caps.online = moderation_caps.role_verified = false;
     moderation_caps.can_delete = moderation_caps.can_ban = false;
+    moderation_caps.read_only = read_only_enforced.load();
     copy_text(moderation_caps.reason, reason);
     visible_state.moderation_generation = moderation_caps.generation;
     visible_state.moderation_role_verified = false;
@@ -317,18 +316,21 @@ HttpResult request(const char* url, esp_http_client_method_t method, const std::
 bool config_store(const Configuration& value) {
     nvs_handle_t handle;
     if (nvs_open("forearm", NVS_READWRITE, &handle) != ESP_OK) return false;
-    const bool okay = nvs_set_blob(handle, "config", &value, sizeof(value)) == ESP_OK && nvs_commit(handle) == ESP_OK;
+    bool okay = nvs_set_blob(handle, "config", &value, sizeof(value)) == ESP_OK && nvs_commit(handle) == ESP_OK;
+    Configuration verified{}; std::size_t size = sizeof(verified);
+    okay = okay && nvs_get_blob(handle, "config", &verified, &size) == ESP_OK && size == sizeof(verified) &&
+           !std::memcmp(&value, &verified, sizeof(value));
     nvs_close(handle);
     return okay;
 }
 void config_load() {
     nvs_handle_t handle;
     if (nvs_open("forearm", NVS_READONLY, &handle) != ESP_OK) return;
+    std::uint8_t stored[sizeof(Configuration)]{};
+    std::size_t bytes = sizeof(stored);
     Configuration value{};
-    std::size_t bytes = sizeof(value);
-    if (nvs_get_blob(handle, "config", &value, &bytes) == ESP_OK && bytes == sizeof(value) &&
-        value.ssid[32] == 0 && value.password[64] == 0 && value.client_id[64] == 0 && value.channel[32] == 0 &&
-        client_name(value.client_id) && login_name(value.channel, true)) configuration = value;
+    if (nvs_get_blob(handle, "config", stored, &bytes) == ESP_OK && forearm::decode_device_configuration(stored, bytes, value))
+        configuration = value;
     nvs_close(handle);
 }
 void tokens_forget() {
@@ -553,6 +555,7 @@ bool refresh_token() {
 // its role directly with the /validate user ID.
 // https://dev.twitch.tv/docs/api/reference/#get-moderated-channels
 bool verify_moderator_role() {
+    if (read_only_enforced.load()) return false;
     if (!std::strcmp(account_id, broadcaster_id)) return true;
     if (!grant_role) return false;
     std::string cursor;
@@ -586,13 +589,15 @@ bool verify_moderator_role() {
 }
 void publish_moderation_capabilities(bool role_verified) {
     forearm::ModerationCapabilities next{};
+    next.read_only = read_only_enforced.load();
     next.authenticated = account_validated;
     next.role_verified = role_verified;
-    next.can_delete = grant_delete && role_verified;
-    next.can_ban = grant_ban && role_verified;
+    next.can_delete = grant_delete && role_verified && !next.read_only;
+    next.can_ban = grant_ban && role_verified && !next.read_only;
     copy_exact(next.broadcaster_id, broadcaster_id);
     copy_exact(next.moderator_id, account_id);
-    copy_text(next.reason, !grant_delete || !grant_ban ? "Reconnect Twitch to grant moderation permission" :
+    copy_text(next.reason, next.read_only ? "Read-only channel profile: moderation is disabled" :
+        !grant_delete || !grant_ban ? "Reconnect Twitch to grant moderation permission" :
         !role_verified ? "Broadcaster/moderator role is not verified" : "Moderation ready");
     portENTER_CRITICAL(&state_mux);
     const bool changed = moderation_caps.authenticated != next.authenticated ||
@@ -658,7 +663,7 @@ Validation validate_account(bool may_refresh = true) {
 void login_begin() {
     if (!*configuration.client_id) { state_message("Twitch Client ID needed in setup"); login_requested = false; return; }
     auto response = request("https://id.twitch.tv/oauth2/device", HTTP_METHOD_POST,
-        "client_id=" + form_escape(configuration.client_id) + "&scopes=" + form_escape(kConsentScopes));
+        "client_id=" + form_escape(configuration.client_id) + "&scopes=" + form_escape(read_only_enforced.load() ? kScope : kConsentScopes));
     if (!response.ok || response.status == 429 || response.status >= 500) {
         state_message("Login service unavailable; retrying"); next_network_attempt_ms = now_ms() + 15000; return;
     }
@@ -695,7 +700,7 @@ void login_poll() {
     if (now_ms() >= device_deadline_ms) { login_cancel("Login code expired; tap Connect again"); return; }
     if (now_ms() < next_poll_ms || now_ms() < api_backoff_until_ms) return;
     auto response = request("https://id.twitch.tv/oauth2/token", HTTP_METHOD_POST,
-        "client_id=" + form_escape(configuration.client_id) + "&scopes=" + form_escape(kConsentScopes) +
+        "client_id=" + form_escape(configuration.client_id) + "&scopes=" + form_escape(read_only_enforced.load() ? kScope : kConsentScopes) +
         "&device_code=" + form_escape(device_code) + "&grant_type=" + form_escape("urn:ietf:params:oauth:grant-type:device_code"));
     portENTER_CRITICAL(&state_mux);
     ++visible_state.login_poll_count; visible_state.last_login_http_status = response.status;
@@ -780,6 +785,9 @@ void finish_moderation(const forearm::ModerationResult& result) {
 }
 void execute_moderation(const Command& command) {
     const auto& target = command.moderation; // Immutable copy, never a UI row pointer.
+    if (read_only_enforced.load()) {
+        finish_moderation(result_for(target, forearm::ModerationState::Denied, forearm::ModerationDenial::ReadOnlyProfile)); return;
+    }
     auto capabilities = twitch_moderation_capabilities();
     auto denial = forearm::moderation_validate(target, capabilities, now_ms());
     if (denial == forearm::ModerationDenial::None &&
@@ -800,6 +808,7 @@ void execute_moderation(const Command& command) {
     }
     // Session/config can change while the read-only role lookup is in flight.
     capabilities = twitch_moderation_capabilities();
+    if (read_only_enforced.load()) capabilities.read_only = true;
     forearm::ModerationHttpRequest http{};
     if (!forearm::moderation_build_http(target, capabilities, now_ms(), http)) {
         finish_moderation(result_for(target, forearm::ModerationState::Denied,
@@ -892,20 +901,31 @@ void process_frame(RawFrame& frame) {
             const auto* message = cJSON_GetObjectItemCaseSensitive(notification, "message");
             recognized = copy_exact(event.message_id, string_value(notification, "message_id")) && *event.message_id &&
                 copy_exact(event.user_id, string_value(notification, "chatter_user_id")) && *event.user_id;
-            copy_text(event.display_name, string_value(notification, "chatter_user_name"));
+            if (!copy_exact(event.user_login, string_value(notification, "chatter_user_login")) ||
+                !login_name(event.user_login, false)) event.user_login[0] = 0;
+            // Never truncate a localized sender into a different-looking
+            // identity. Preserve the full supported name or exact login.
+            if (!copy_exact(event.display_name, string_value(notification, "chatter_user_name")) || !*event.display_name)
+                copy_exact(event.display_name, event.user_login);
             copy_text(event.text, string_value(message, "text"));
+            forearm::MessageFragmentCursor fragment_cursor(string_value(message, "text"), std::strlen(event.text));
             const auto* fragments = cJSON_GetObjectItemCaseSensitive(message, "fragments");
             const cJSON* fragment = nullptr;
             cJSON_ArrayForEach(fragment, fragments) {
-                if (event.emote_count == 8) break;
+                const auto range = fragment_cursor.consume(string_value(fragment, "text"));
+                if (event.emote_count == 8) continue;
                 if (std::strcmp(string_value(fragment, "type"), "emote")) continue;
                 const auto* emote = cJSON_GetObjectItemCaseSensitive(fragment, "emote");
                 auto& output = event.emotes[event.emote_count];
-                if (copy_exact(output.id, string_value(emote, "id")) && *output.id) {
-                    copy_text(output.text, string_value(fragment, "text"));
+                if (copy_exact(output.id, string_value(emote, "id")) && *output.id &&
+                    copy_exact(output.text, string_value(fragment, "text")) && *output.text) {
+                    output.byte_offset = range.byte_offset; output.byte_length = range.byte_length;
+                    output.position_valid = range.position_valid;
                     ++event.emote_count;
                 }
             }
+            if (!cJSON_IsArray(fragments) || !fragment_cursor.complete())
+                for (unsigned i = 0; i < event.emote_count; ++i) event.emotes[i].position_valid = false;
             const auto* badges = cJSON_GetObjectItemCaseSensitive(notification, "badges");
             const cJSON* badge = nullptr;
             cJSON_ArrayForEach(badge, badges) {
@@ -947,10 +967,12 @@ void process_frame(RawFrame& frame) {
 }
 
 void configure(const Configuration& value) {
-    if (!config_store(value)) { state_message("Setup could not be saved to device NVS"); return; }
-    const bool changed_client = std::strcmp(configuration.client_id, value.client_id);
+    Configuration next = value;
+    next.read_only = configuration.read_only; // Wi-Fi setup does not silently change profile permission.
+    if (!config_store(next)) { state_message("Setup could not be saved to device NVS"); return; }
+    const bool changed_client = std::strcmp(configuration.client_id, next.client_id);
     stop_sockets(); login_cancel("Applying device setup");
-    configuration = value;
+    configuration = next;
     wifi_test_blocked.store(false); wifi_disconnect_until_ms = 0;
     logged_out = false; account_validated = false; login_requested = false;
     if (changed_client) tokens_forget();
@@ -965,11 +987,33 @@ void configure(const Configuration& value) {
     next_network_attempt_ms = 0;
 }
 
+void watch_channel(const Configuration& target) {
+    Configuration next = configuration; // Only the worker copies saved secrets.
+    copy_exact(next.channel, target.channel); next.read_only = target.read_only;
+    if (!config_store(next)) {
+        if (target.read_only) read_only_enforced.store(true); // Fail closed even if persistence failed.
+        portENTER_CRITICAL(&state_mux); visible_state.read_only = read_only_enforced.load(); portEXIT_CRITICAL(&state_mux);
+        force_validation.store(true);
+        state_message("Channel profile could not be saved; previous channel retained"); return;
+    }
+    stop_sockets(); login_cancel("Switching channel profile");
+    configuration = next;
+    read_only_enforced.store(configuration.read_only != 0);
+    account_validated = false; last_validation_ms = 0; login_requested = false;
+    next_network_attempt_ms = 0;
+    portENTER_CRITICAL(&state_mux);
+    visible_state.read_only = configuration.read_only != 0;
+    copy_exact(visible_state.channel, configuration.channel);
+    portEXIT_CRITICAL(&state_mux);
+}
+
 void worker(void*) {
     portENTER_CRITICAL(&state_mux); visible_state.worker_running = true; portEXIT_CRITICAL(&state_mux);
     config_load(); tokens_load();
+    read_only_enforced.store(configuration.read_only != 0);
     portENTER_CRITICAL(&state_mux);
     visible_state.configured = *configuration.ssid && *configuration.client_id;
+    visible_state.read_only = configuration.read_only != 0;
     copy_exact(visible_state.channel, configuration.channel);
     portEXIT_CRITICAL(&state_mux);
     if (*configuration.ssid) {
@@ -1004,6 +1048,7 @@ void worker(void*) {
         Command command;
         while (xQueueReceive(commands, &command, 0) == pdTRUE) {
             if (command.kind == CommandKind::Configure) configure(command.config);
+            else if (command.kind == CommandKind::WatchChannel) watch_channel(command.config);
             else if (command.kind == CommandKind::Login) {
                 stop_sockets(); login_cancel("Preparing Twitch login");
                 account_validated = false; last_validation_ms = 0;
@@ -1159,6 +1204,22 @@ bool twitch_set_config(const char* ssid, const char* password, const char* clien
     force_validation.store(true);
     return xQueueSend(commands, &command, 0) == pdTRUE;
 }
+bool twitch_watch_channel(const char* channel, bool read_only) {
+    if (!commands || !login_name(channel, false)) return false;
+    Command command; command.kind = CommandKind::WatchChannel;
+    if (!copy_exact(command.config.channel, channel)) return false;
+    for (auto& c : command.config.channel) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    command.config.read_only = read_only ? 1 : 0;
+    // Never copy saved SSID/password/token state on the UI caller. Permission
+    // removal takes effect immediately, before NVS or socket work can block.
+    if (read_only) {
+        read_only_enforced.store(true);
+        portENTER_CRITICAL(&state_mux); visible_state.read_only = true; portEXIT_CRITICAL(&state_mux);
+    }
+    invalidate_moderation("Channel profile is changing");
+    force_validation.store(true);
+    return xQueueSend(commands, &command, 0) == pdTRUE;
+}
 void twitch_request_login() {
     if (commands) {
         invalidate_moderation("New Twitch consent is pending"); force_validation.store(true);
@@ -1189,6 +1250,11 @@ bool twitch_network_busy() {
 forearm::ModerationCapabilities twitch_moderation_capabilities() {
     portENTER_CRITICAL(&state_mux); auto snapshot = moderation_caps; portEXIT_CRITICAL(&state_mux);
     snapshot.online = snapshot.online && wifi_connected.load();
+    snapshot.read_only = snapshot.read_only || read_only_enforced.load();
+    if (snapshot.read_only) {
+        snapshot.can_delete = snapshot.can_ban = false;
+        copy_text(snapshot.reason, "Read-only channel profile: moderation is disabled");
+    }
     return snapshot;
 }
 forearm::ModerationResult twitch_moderate(const forearm::ModerationRequest& target) {

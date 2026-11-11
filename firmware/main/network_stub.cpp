@@ -3,6 +3,7 @@
 #include <cstdio>
 bool twitch_start() { return true; }
 bool twitch_set_config(const char*,const char*,const char*,const char*) { return false; }
+bool twitch_watch_channel(const char*,bool) { return false; }
 void twitch_request_login() {}
 void twitch_logout() {}
 bool twitch_next_event(TwitchEvent&,std::uint32_t) { return false; }

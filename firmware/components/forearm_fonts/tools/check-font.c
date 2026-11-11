@@ -46,5 +46,28 @@ int main(void) {
     assert(lv_font_get_glyph_dsc(body, &glyph, 0x10ffff, 0));
     assert(!glyph.is_placeholder && glyph.adv_w == question.adv_w);
     assert(lv_font_get_glyph_bitmap(glyph.resolved_font, 0x10ffff) != NULL);
-    puts("LVGL8 font lookup passed: 500 emoji lookups, extended Latin accents, Greek, Cyrillic, punctuation/currency/arrows, zero-width formats, unsupported replacement.");
+    // Display-name coverage must inspect real cmaps, not this intentionally
+    // successful replacement callback (whose is_placeholder is also false).
+    assert(lv_font_get_glyph_dsc(body, &glyph, 0x4e00, 0));
+    assert(!glyph.is_placeholder);
+    assert(!forearm_font_supports_text("一"));
+    assert(!forearm_font_supports_text("日本語"));
+    assert(!forearm_font_supports_text("viewer_name_漢"));
+    const char* supported_names[] = {"viewer_name_", "ASCII_Name123", "café—naïve",
+        "Ελληνικά", "Привет", "😀🚀💜", "❤️", "👨‍👩‍👧‍👦", "🇬🇧"};
+    for (unsigned i = 0; i < sizeof(supported_names) / sizeof(supported_names[0]); ++i)
+        assert(forearm_font_supports_text(supported_names[i]));
+    for (unsigned character = 0x20; character <= 0x7e; ++character) {
+        const char ascii[] = {(char)character, 0};
+        assert(forearm_font_supports_text(ascii));
+    }
+    assert(!forearm_font_supports_text(NULL));
+    assert(!forearm_font_supports_text(""));
+    assert(!forearm_font_supports_text("‍️")); // Format-only text has no mapped glyph.
+    assert(!forearm_font_supports_text("\x7f")); // Half-open end of ASCII cmap.
+    assert(!forearm_font_supports_text("\xc0\x80")); // Overlong NUL.
+    assert(!forearm_font_supports_text("\xe2\x82")); // Truncated UTF-8.
+    assert(!forearm_font_supports_text("\xed\xa0\x80")); // Surrogate.
+    assert(!forearm_font_supports_text("\xf4\x90\x80\x80")); // Beyond Unicode.
+    puts("LVGL8 font lookup/coverage passed: 500 emoji lookups, Latin/Greek/Cyrillic, controls, real cmap boundaries, exact ASCII login, unsupported CJK/replacement rejection, strict UTF-8; no shaping claim.");
 }

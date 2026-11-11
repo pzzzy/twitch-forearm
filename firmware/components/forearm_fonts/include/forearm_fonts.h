@@ -15,6 +15,12 @@ const lv_font_t* forearm_emoji_font(void);
 // Greek, Cyrillic, punctuation, currency and arrows before the emoji fallback.
 const lv_font_t* forearm_fallback_font(void);
 
+// True only for valid UTF-8 represented by real glyphs in the compiled body
+// font chain. The readable '?' replacement does not establish support. Hidden
+// ZWJ/variation/tag controls may accompany mapped text; shaping is not implied.
+// NULL, empty/format-only text and any unsupported base codepoint return false.
+bool forearm_font_supports_text(const char* utf8);
+
 #ifdef __cplusplus
 }
 #endif

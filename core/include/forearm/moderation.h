@@ -12,7 +12,7 @@ enum class ModerationState : std::uint8_t { Pending, Succeeded, Denied, RateLimi
 enum class ModerationDenial : std::uint8_t {
     None, ConfirmationRequired, InvalidIdentifier, NotAuthenticated, Offline,
     StaleSession, RoleMissing, ScopeMissing, WrongChannel, SharedSource,
-    ProtectedTarget, InvalidDuration, MessageDeleted, MessageTooOld, Busy, DuplicateRequest
+    ProtectedTarget, InvalidDuration, MessageDeleted, MessageTooOld, Busy, DuplicateRequest, ReadOnlyProfile
 };
 struct ModerationRequest {
     std::uint32_t request_id = 0;
@@ -30,6 +30,7 @@ struct ModerationRequest {
     std::uint64_t received_at_ms = 0;
 };
 struct ModerationCapabilities {
+    bool read_only = false;
     bool authenticated = false;
     bool online = false;
     bool role_verified = false;
@@ -70,6 +71,7 @@ inline bool moderation_message_id(std::string_view id) {
 inline const char* moderation_denial_text(ModerationDenial reason) {
     switch (reason) {
     case ModerationDenial::None: return "Ready";
+    case ModerationDenial::ReadOnlyProfile: return "Read-only channel profile: moderation is disabled";
     case ModerationDenial::ConfirmationRequired: return "A separate confirmation is required";
     case ModerationDenial::InvalidIdentifier: return "Missing or malformed target identity";
     case ModerationDenial::NotAuthenticated: return "Twitch login required";
@@ -92,6 +94,7 @@ inline ModerationDenial moderation_validate(const ModerationRequest& request,
                                            const ModerationCapabilities& capabilities,
                                            std::uint64_t now_ms) {
     if (!request.confirmed) return ModerationDenial::ConfirmationRequired;
+    if (capabilities.read_only) return ModerationDenial::ReadOnlyProfile;
     if (!request.request_id) return ModerationDenial::InvalidIdentifier;
     if (!capabilities.authenticated) return ModerationDenial::NotAuthenticated;
     if (!capabilities.online) return ModerationDenial::Offline;

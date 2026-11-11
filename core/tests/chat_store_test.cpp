@@ -126,8 +126,8 @@ static void unicode_and_identity_bounds() {
   unicode.display_name = long_name;
   unicode.text = long_text;
   CHECK(store.append(unicode) == InsertResult::inserted);
-  CHECK(store.at(0)->display_name.view().size() == 63);
-  CHECK(store.at(0)->display_name.truncated());
+  CHECK(store.at(0)->display_name.view() == long_name);
+  CHECK(!store.at(0)->display_name.truncated());
   CHECK(store.at(0)->text.view().size() == 2047);
   CHECK(store.at(0)->text.truncated());
   CHECK(store.at(0)->sequence == 1); // Rejected inputs consume no sequence.
@@ -140,6 +140,40 @@ static void unicode_and_identity_bounds() {
   CHECK(store.append(maximum) == InsertResult::inserted);
   CHECK(store.at(1)->text.view() == emoji_message);
   CHECK(!store.at(1)->text.truncated());
+}
+
+static void complete_sender_names() {
+  ChatStore<2> store;
+  std::string display;
+  for (unsigned i = 0; i < 25; ++i) display += "\xF0\x9F\x98\x80";
+  auto maximum = input("name-maximum");
+  maximum.display_name = display;
+  maximum.user_login = "anonymousviewer_name_";
+  CHECK(store.append(maximum) == InsertResult::inserted);
+  CHECK(store.at(0)->display_name.view() == display && display.size() == 100);
+  CHECK(!store.at(0)->display_name.truncated());
+  CHECK(store.at(0)->user_login.view() == "anonymousviewer_name_");
+  CHECK(store.select(1));
+  store.append(input("evict-one")); store.append(input("evict-two"));
+  CHECK(store.selected()->display_name.view() == display && store.selected()->user_login.view() == "anonymousviewer_name_");
+  CHECK(store.selected()->user_id.view() == maximum.user_id);
+  auto bad = input("name-too-long");
+  const auto too_long = display + "x";
+  bad.display_name = too_long; bad.user_login = "anonymousviewer_name_";
+  CHECK(store.append(bad) == InsertResult::invalid); // Never silently shorten attribution.
+  bad = input("login-too-long");
+  const std::string long_login(26, 'a'); bad.user_login = long_login;
+  CHECK(store.append(bad) == InsertResult::invalid);
+  bad = input("login-malformed"); bad.user_login = "viewer/name";
+  CHECK(store.append(bad) == InsertResult::invalid);
+  bad.user_login = "\xE6\x97\xA5";
+  CHECK(store.append(bad) == InsertResult::invalid); // Login is separate ASCII, not localized display.
+  auto ascii = input("ascii-maximum");
+  const std::string max_login(24, 'a');
+  const auto underscore_login = max_login + "_";
+  ascii.user_login = underscore_login;
+  CHECK(store.append(ascii) == InsertResult::inserted);
+  CHECK(store.at(1)->user_login.view() == underscore_login);
 }
 
 static void explicit_tombstone_identity_selection() {
@@ -165,5 +199,6 @@ int main() {
   stable_selection();
   unicode_and_identity_bounds();
   explicit_tombstone_identity_selection();
+  complete_sender_names();
   std::cout << "Chat store checks passed; no live Twitch operations.\n";
 }

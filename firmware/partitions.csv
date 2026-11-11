@@ -1,4 +1,4 @@
-# Proposed NEW project layout; do not write over factory firmware during preparation.
+# Forearm Chat hardware-beta layout; preserve NVS and tokens during updates.
 # Name,Type,SubType,Offset,Size,Flags
 nvs,data,nvs,0x9000,0x6000,
 otadata,data,ota,0xf000,0x2000,
