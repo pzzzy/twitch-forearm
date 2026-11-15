@@ -4,6 +4,24 @@
 #include <string>
 #define CHECK(x) do { if (!(x)) {std::cerr << "line " << __LINE__ << ": " << #x << '\n'; std::exit(1);} } while (0)
 int main() {
+    // The UI tick begins before the worker publishes a new pending flow. The
+    // actual delivery helper must fetch fresh state, otherwise this QR is lost.
+    const forearm::DeviceLoginFlow old_tick{0, false};
+    forearm::DeviceLoginFlow latest{forearm::next_login_generation(old_tick.generation), true};
+    unsigned reads = 0, shown = 0;
+    auto current_flow = [&] { ++reads; return latest; };
+    auto present = [&] { ++shown; };
+    CHECK(forearm::dispatch_current_login(latest.generation, current_flow, present));
+    CHECK(reads == 1 && shown == 1 && !old_tick.pending);
+    const auto prior_generation = latest.generation;
+    latest = {forearm::next_login_generation(latest.generation), false};
+    CHECK(!forearm::dispatch_current_login(prior_generation, current_flow, present));
+    latest = {forearm::next_login_generation(latest.generation), true};
+    CHECK(!forearm::dispatch_current_login(prior_generation, current_flow, present));
+    CHECK(!forearm::dispatch_current_login(0, current_flow, present));
+    CHECK(forearm::dispatch_current_login(latest.generation, current_flow, present));
+    CHECK(shown == 2 && reads == 5);
+    CHECK(forearm::next_login_generation(UINT32_MAX) == 1);
     char url[512];
     const std::string base = "https://www.twitch.tv/activate";
     auto valid = [&](const std::string& input, const std::string& expected) {

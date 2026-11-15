@@ -1,6 +1,6 @@
 # Dependency and advisory review
 
-Reviewed **2026-11-10** for the **0.4.0-beta.1 hardware beta** on ESP32-S3.
+Reviewed **2026-11-15** for the **0.5.0-beta.1 candidate** on ESP32-S3.
 This is an applicability assessment of known vendor advisories and the selected
 configuration, not a claim that the software is free of vulnerabilities.
 Repeat it before releases and after dependency, compiler, protocol or decoder
@@ -20,8 +20,8 @@ changes. A successful package scan does not cover native firmware dependencies.
 - Verified HTTPS/WSS client connections use TLS 1.2 and the SDK CA bundle after
   time synchronization. TLS 1.3 and DTLS are not enabled in this build. USB
   administration and the host loopback setup service have separate trust bounds.
-- PNG assets use LVGL's bundled LodePNG 20201017, a fixed Twitch HTTPS origin,
-  exact validated IDs, no redirects, at most **32 KiB** compressed source and
+- PNG assets use LVGL's bundled LodePNG 20201017, fixed Twitch/7TV origins and
+  a commit-pinned Twemoji CDN path, exact validated IDs, no redirects, at most **32 KiB** compressed source and
   **128 × 128** dimensions checked before decode. Inflate output is capped at
   **133,120 bytes**; text/unknown chunks are not retained and text/ICC metadata
   limits are 4,096 bytes. Decoded-pixel cache budget is 512 KiB. These bounds reduce
@@ -36,6 +36,7 @@ maps. The final binary license/input audit must still pass for each package.
 All **26** entries currently published in the
 [official ESP-IDF advisory list](https://github.com/espressif/esp-idf/security/advisories)
 were reviewed against their affected versions and feature prerequisites.
+The November 15 recheck returned the same 26 advisory entries.
 The assessment column is this project's inference from those prerequisites
 and its configuration. A disabled feature can become applicable after a change.
 
@@ -137,14 +138,21 @@ not describe this client transport.
 was reviewed alongside the actual bundled decoder and application limits above.
 Untrusted image parsing remains a native-code attack surface even behind a
 verified CDN. Keep the bounds, PNG signature/IHDR checks, metadata restrictions
-and fixed origin. New formats, animated/third-party emotes or arbitrary URLs
-require a separate review; do not infer permission from cache capacity alone.
+and fixed origins. The reviewed static 7TV poster/Twemoji PNG paths use the same
+bounded decoder and receive no Twitch credentials. The reusable LRU holds
+visible image leases through LVGL source detachment and decoder invalidation;
+only unpinned entries retire. Catalog parsing remains bounded to 512 aliases
+and 4 MiB, with immutable snapshots while readers use them. Host lifecycle tests
+cover retirement and readiness/acquire races; they do not prove decoder safety.
+New formats, animation decoding, additional providers or arbitrary URLs require
+a separate review; do not infer permission from cache capacity alone.
 
 ## Host and font-tool audit results
 
 The reviewed host requirements are `pyserial==3.5` and `Pillow==13.0.0` on
 Python 3.11 or newer. `pip-audit 2.10.1` reported no known findings for those two
-installed requirements. `npm audit` for the pinned font-tool lock reported
+installed requirements in the November 15 recheck. The same day's separate
+`fonttools==4.60.2` audit also reported no known findings. `npm audit` for the pinned font-tool lock reported
 zero findings across 11 dependencies. These results are time- and database-bound;
 they do not assess the SDK, C decoders, radio firmware, application logic or
 unlisted global developer tools. Font generation is not part of an ordinary

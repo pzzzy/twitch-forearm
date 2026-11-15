@@ -112,6 +112,14 @@ void app_ui_clear_channel(const char *channel_id);
 void app_ui_set_status(const char *status);
 void app_ui_set_network(const char *status);
 void app_ui_set_channel(const char *channel);
+// Saved profile is independent of login success. NULL/empty clears the room;
+// case and an optional leading '#' normalize to the same profile.
+void app_ui_set_profile(const char *channel, bool read_only);
+// Returns a stable '#login' label, or empty when no room is configured.
+const char *app_ui_channel();
+// Clears stale account/action state on authorization loss while retaining the
+// configured room and its local scrollback. Does not start or hide login.
+void app_ui_set_session(bool authenticated, const char *login);
 // Apply the profile before its capabilities. Starts read-only until explicitly
 // configured; profile changes invalidate old confirmations and restoration.
 void app_ui_set_read_only(bool enabled);

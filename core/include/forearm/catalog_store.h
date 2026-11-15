@@ -14,6 +14,17 @@ inline bool catalog_add(CatalogEmote* items, unsigned& count, unsigned capacity,
     if (count >= capacity) return false;
     items[count++] = value; return true;
 }
+// Copy a validated provider from the other immutable snapshot. Failure leaves
+// the destination unchanged, so capacity pressure cannot publish half a set.
+inline bool catalog_append_provider(CatalogEmote* items, unsigned& count, unsigned capacity,
+                                    const CatalogEmote* previous, unsigned previous_count, bool global) {
+    unsigned required = 0;
+    for (unsigned i = 0; i < previous_count; ++i) if (previous[i].global == global) ++required;
+    if (count > capacity || required > capacity - count) return false;
+    for (unsigned i = 0; i < previous_count; ++i)
+        if (previous[i].global == global) items[count++] = previous[i];
+    return true;
+}
 inline const CatalogEmote* catalog_find(const CatalogEmote* items, unsigned count,
                                       std::string_view name, bool channel_matches) {
     auto* found = std::lower_bound(items, items + count, name,

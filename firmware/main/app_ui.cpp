@@ -70,6 +70,7 @@ struct Layout {
     ModerationMetadata *moderation = nullptr;
     std::uint16_t author_height = 27;
     std::uint16_t revision = 1;
+    std::uint32_t catalog_generation = 0;
 };
 struct Row {
     lv_obj_t *button = nullptr;
@@ -123,6 +124,9 @@ std::uint32_t taps = 0;
 std::uint32_t scrolls = 0;
 std::uint32_t emote_rows = 0;
 std::uint32_t last_ready_emotes = 0;
+std::uint32_t last_media_generation = 0, last_catalog_generation = 0;
+std::uint64_t next_media_request_ms = 0, catalog_scan_sequence = 0;
+bool catalog_scan_active = false, media_replan_pending = false;
 std::uint32_t font_generation = 1;
 std::uint32_t label_updates = 0;
 struct BodySprite {
@@ -178,7 +182,7 @@ std::uint64_t pressed_sequence = 0;
 std::uint32_t pressed_tick = 0;
 lv_point_t pressed_point{};
 bool gesture_cancelled = false;
-char channel[96] = "#forearm";
+char channel[96]{};
 char network_status[128] = "Offline";
 char account_name[96] = "Not connected";
 char transient_status[128] = "";
@@ -411,21 +415,26 @@ void configure_scale_fonts() {
     minimum_row_height = scaled(76); line_space = scaled(4);
 }
 
-unsigned emote_zoom(const lv_img_dsc_t *source) {
+unsigned emote_zoom(unsigned width_px, unsigned height_px) {
     const unsigned target = lv_font_get_line_height(&message_font);
-    return std::max<unsigned>(1, std::min(target * 256 / source->header.h,
-                                        target * 4 * 256 / source->header.w));
+    return std::max<unsigned>(1, std::min(target * 256 / height_px,
+                                        target * 4 * 256 / width_px));
 }
-bool update_emote_metrics(EmoteRow &meta) {
+unsigned emote_zoom(const lv_img_dsc_t *source) { return emote_zoom(source->header.w, source->header.h); }
+bool update_emote_metrics(EmoteRow &meta, const Row *leased = nullptr) {
     std::uint8_t mask = 0;
     bool changed = false;
     for (unsigned i = 0; i < meta.count; ++i) {
         unsigned advance = lv_font_get_line_height(&message_font) + 1;
-        if (const auto *source = emote_cache_get(meta.ids[i])) {
-            if (source->header.w && source->header.h) {
-                mask |= 1U << i;
-                advance = std::max<unsigned>(advance, (source->header.w * emote_zoom(source) + 255) / 256 + 1);
+        unsigned image_width = 0, image_height = 0;
+        if (leased) {
+            if (const auto *source = leased->image_sources[i]) {
+                image_width = source->header.w; image_height = source->header.h;
             }
+        } else emote_cache_dimensions(meta.ids[i], image_width, image_height);
+        if (image_width && image_height) {
+            mask |= 1U << i;
+            advance = std::max<unsigned>(advance, (image_width * emote_zoom(image_width, image_height) + 255) / 256 + 1);
         }
         changed |= meta.advances[i] != advance;
         meta.advances[i] = static_cast<std::uint16_t>(advance);
@@ -940,6 +949,38 @@ void body_draw_event(lv_event_t *event) {
     text_draw_max_us = std::max(text_draw_max_us, elapsed);
 }
 
+lv_color_t detached_pixel{};
+const lv_img_dsc_t detached_image = [] {
+    lv_img_dsc_t image{};
+    image.header.cf = LV_IMG_CF_TRUE_COLOR; image.header.w = image.header.h = 1;
+    image.data_size = sizeof(detached_pixel);
+    image.data = reinterpret_cast<const std::uint8_t *>(&detached_pixel);
+    return image;
+}();
+void release_row_image(Row &row, unsigned index) {
+    const auto *previous = row.image_sources[index];
+    if (row.images[index]) {
+        lv_obj_add_flag(row.images[index], LV_OBJ_FLAG_HIDDEN);
+        // NULL is not a reliable detach for LVGL8 images. A stable tiny source
+        // removes the object's old descriptor borrow before releasing its lease.
+        if (lv_img_get_src(row.images[index]) != &detached_image)
+            lv_img_set_src(row.images[index], &detached_image);
+    }
+    row.image_sources[index] = nullptr;
+    if (previous) emote_cache_release(previous);
+}
+void release_row_images(Row &row) {
+    for (unsigned i = 0; i < row.images.size(); ++i) release_row_image(row, i);
+}
+void sync_row_images(Row &row, const EmoteRow *meta) {
+    for (unsigned i = 0; i < row.image_sources.size(); ++i) {
+        const auto *id = meta && i < meta->count ? meta->ids[i] : nullptr;
+        if (id && row.image_sources[i] && emote_cache_matches(id, row.image_sources[i])) continue;
+        if (row.image_sources[i] || row.images[i]) release_row_image(row, i);
+        if (id) row.image_sources[i] = emote_cache_acquire(id);
+    }
+}
+
 void render_emotes(Row &row, const Layout *item) {
     const auto *meta = item ? item->emotes : nullptr;
     InlineMetrics metrics{meta ? meta->advances : nullptr};
@@ -973,10 +1014,9 @@ void render_emotes(Row &row, const Layout *item) {
     }
     for (unsigned i = 0; i < row.images.size(); ++i) {
         const auto *source = meta && i < meta->count && positioned[i] && (meta->ready_mask & (1U << i)) ?
-                             emote_cache_get(meta->ids[i]) : nullptr;
+                             row.image_sources[i] : nullptr;
         if (!source) {
-            if (row.images[i]) lv_obj_add_flag(row.images[i], LV_OBJ_FLAG_HIDDEN);
-            row.image_sources[i] = nullptr;
+            if (row.image_sources[i] || row.images[i]) release_row_image(row, i);
             continue;
         }
         if (!row.images[i]) {
@@ -984,9 +1024,8 @@ void render_emotes(Row &row, const Layout *item) {
             lv_obj_clear_flag(row.images[i], LV_OBJ_FLAG_CLICKABLE);
             lv_img_set_pivot(row.images[i], 0, 0);
         }
-        if (row.image_sources[i] != source) {
+        if (lv_img_get_src(row.images[i]) != source) {
             lv_img_set_src(row.images[i], source);
-            row.image_sources[i] = source;
         }
         const auto desired_zoom = emote_zoom(source);
         if (lv_img_get_zoom(row.images[i]) != desired_zoom) lv_img_set_zoom(row.images[i], desired_zoom);
@@ -1006,6 +1045,11 @@ void refresh_visible_emotes() {
     for (std::size_t i = 0; i < layout_count; ++i) {
         auto &item = layout[i];
         if (!item.emotes) continue;
+        // Readiness outside the virtual viewport is settled when that record
+        // is bound. Do not perform512×8 cache lookups on every asset completion.
+        bool near_view = false;
+        for (const auto &row : rows) if (row.sequence == item.sequence) { near_view = true; break; }
+        if (!near_view) continue;
         if (!update_emote_metrics(*item.emotes)) continue;
         const auto *message = store->at(i);
         if (!message) continue;
@@ -1031,10 +1075,81 @@ void release_deleted_emotes() {
         const auto *message = store->at(i);
         if (message && message->deleted) invalidate_sprite(message->sequence);
         if (layout[i].emotes && message && message->deleted) {
+            for (auto &row : rows) if (row.sequence == message->sequence) release_row_images(row);
             heap_caps_free(layout[i].emotes);
             layout[i].emotes = nullptr;
             --emote_rows;
         }
+    }
+}
+
+std::size_t layout_index(std::uint64_t sequence) {
+    std::size_t low = 0, high = layout_count;
+    while (low < high) {
+        const auto middle = low + (high - low) / 2;
+        if (layout[middle].sequence < sequence) low = middle + 1;
+        else high = middle;
+    }
+    return low;
+}
+void refresh_one_catalog_message() {
+    if (!catalog_scan_active || !layout_count || fixture_mode || demo) return;
+    std::size_t index = layout_count;
+    // A newly available channel catalog should fix what is being read first.
+    for (const auto &row : rows) {
+        if (!row.sequence || row.top >= scroll_y + chat_height || row.top + row.height <= scroll_y) continue;
+        const auto candidate = layout_index(row.sequence);
+        if (candidate < layout_count && layout[candidate].catalog_generation != last_catalog_generation) {
+            index = candidate; break;
+        }
+    }
+    if (index == layout_count) {
+        index = layout_index(catalog_scan_sequence);
+        while (index < layout_count && layout[index].catalog_generation == last_catalog_generation) ++index;
+        if (index == layout_count) { catalog_scan_active = false; return; }
+        catalog_scan_sequence = layout[index].sequence + 1;
+    }
+    auto &item = layout[index];
+    item.catalog_generation = last_catalog_generation;
+    const auto *message = store->at(index);
+    if (!message || message->deleted) return;
+    std::array<forearm::MediaOccurrence, 8> occurrences{};
+    unsigned count = 0;
+    // Only native Twitch occurrences survive a new catalog interpretation.
+    // Their exact transport spans retain priority over third-party aliases.
+    if (item.emotes) for (unsigned i = 0; i < item.emotes->count; ++i) {
+        const auto *id = item.emotes->ids[i];
+        if (!std::strncmp(id, "7tv:", 4) || !std::strncmp(id, "emoji:", 6)) continue;
+        const auto length = item.emotes->lengths[i], offset = item.emotes->offsets[i];
+        if (length > 64) return; // Keep unusual diagnostic/native metadata intact.
+        auto &value = occurrences[count++];
+        std::strcpy(value.id, id);
+        std::memcpy(value.text, message->text.c_str() + offset, length);
+        value.byte_offset = offset; value.byte_length = length; value.position_valid = true;
+    }
+    count = std::min<unsigned>(occurrences.size(), emote_cache_collect(
+        message->channel_id.c_str(), message->text.c_str(), occurrences.data(), count, occurrences.size()));
+    bool same = count == (item.emotes ? item.emotes->count : 0);
+    for (unsigned i = 0; same && i < count; ++i)
+        same = item.emotes->offsets[i] == occurrences[i].byte_offset &&
+               item.emotes->lengths[i] == occurrences[i].byte_length && !std::strcmp(item.emotes->ids[i], occurrences[i].id);
+    if (same) return;
+    std::array<AppUiEmote, 8> input{};
+    for (unsigned i = 0; i < count; ++i)
+        input[i] = {occurrences[i].id, occurrences[i].text, occurrences[i].byte_offset,
+                    occurrences[i].byte_length, occurrences[i].position_valid};
+    app_ui_set_message_emotes(message->channel_id.c_str(), message->message_id.c_str(), input.data(), count);
+}
+void request_visible_media() {
+    if (now_ms() < next_media_request_ms) return;
+    next_media_request_ms = now_ms() + 1000;
+    if (!emote_cache_init()) return;
+    for (const auto &row : rows) {
+        if (!row.sequence || row.top >= scroll_y + chat_height || row.top + row.height <= scroll_y) continue;
+        const auto index = layout_index(row.sequence);
+        if (index >= layout_count || layout[index].sequence != row.sequence || !layout[index].emotes) continue;
+        for (unsigned i = 0; i < layout[index].emotes->count; ++i)
+            emote_cache_request(layout[index].emotes->ids[i]);
     }
 }
 
@@ -1045,35 +1160,75 @@ void render_rows() {
         if (layout_count) lv_obj_add_flag(empty_hint, LV_OBJ_FLAG_HIDDEN);
         else lv_obj_clear_flag(empty_hint, LV_OBJ_FLAG_HIDDEN);
     }
-    std::int32_t top = 0;
-    std::size_t first = first_visible(&top);
-    if (first > 0) { --first; top -= layout[first].height; }
+    std::int32_t anchor_top = 0;
+    const auto anchor = first_visible(&anchor_top);
+    const auto anchor_offset = scroll_y - anchor_top;
     std::array<std::size_t, kVisibleRows> wanted{};
     std::array<std::int32_t, kVisibleRows> positions{};
     std::array<Row *, kVisibleRows> assigned{};
     std::array<bool, kVisibleRows> used{};
     std::size_t wanted_count = 0;
-    for (std::size_t i = first; i < layout_count && wanted_count < rows.size(); ++i) {
-        if (top > scroll_y + chat_height + 96) break;
-        wanted[wanted_count] = i;
-        positions[wanted_count++] = top;
-        top += layout[i].height;
-    }
-    // Reserve objects already displaying these exact records. Crossing a row
-    // boundary should recycle one object, not rebind every visible label.
-    for (std::size_t i = 0; i < wanted_count; ++i) {
-        for (std::size_t j = 0; j < rows.size(); ++j) {
-            if (!used[j] && rows[j].sequence == layout[wanted[i]].sequence) {
-                assigned[i] = &rows[j]; used[j] = true; break;
+    media_replan_pending = false;
+    // Bind leases before constructing zero-ink markers. If a worker eviction
+    // wins the dimensions/acquire race, restore literal text and settle the new
+    // heights before any DRAW. Once acquired, these visible assets cannot move.
+    for (unsigned pass = 0; pass < kVisibleRows; ++pass) {
+        std::int32_t top = 0;
+        std::size_t first = first_visible(&top);
+        if (first > 0) { --first; top -= layout[first].height; }
+        wanted_count = 0; assigned.fill(nullptr); used.fill(false);
+        for (std::size_t i = first; i < layout_count && wanted_count < rows.size(); ++i) {
+            if (top > scroll_y + chat_height + 96) break;
+            wanted[wanted_count] = i; positions[wanted_count++] = top;
+            top += layout[i].height;
+        }
+        for (std::size_t i = 0; i < wanted_count; ++i)
+            for (std::size_t j = 0; j < rows.size(); ++j)
+                if (!used[j] && rows[j].sequence == layout[wanted[i]].sequence) {
+                    assigned[i] = &rows[j]; used[j] = true; break;
+                }
+        for (std::size_t i = 0; i < wanted_count; ++i) {
+            if (assigned[i]) continue;
+            for (std::size_t j = 0; j < rows.size(); ++j)
+                if (!used[j]) { assigned[i] = &rows[j]; used[j] = true; break; }
+        }
+        for (std::size_t i = 0; i < rows.size(); ++i)
+            if (!used[i]) release_row_images(rows[i]);
+        bool changed = false;
+        for (std::size_t i = 0; i < wanted_count; ++i) {
+            auto &row = *assigned[i]; auto &item = layout[wanted[i]];
+            const auto *message = store->at(wanted[i]);
+            if (!message) continue;
+            if (row.sequence != message->sequence) {
+                row.sequence = message->sequence; row.font_generation = 0;
+            }
+            sync_row_images(row, message->deleted ? nullptr : item.emotes);
+            if (item.emotes && !message->deleted && update_emote_metrics(*item.emotes, &row)) {
+                const auto old_height = item.height;
+                item.height = measure_message(*message, item.emotes, &item.author_height);
+                total_height += item.height - old_height;
+                ++item.revision; invalidate_sprite(item.sequence); changed = true;
             }
         }
+        if (!changed) break;
+        if (store->paused() && layout_count) {
+            std::int32_t next_top = 0;
+            for (std::size_t i = 0; i < anchor; ++i) next_top += layout[i].height;
+            scroll_y = next_top + std::min<std::int32_t>(anchor_offset, layout[anchor].height - 1);
+        } else scroll_y = max_scroll();
+        layout_dirty = true;
+        if (pass + 1 == kVisibleRows) media_replan_pending = true;
     }
+    // The last bounded pass can also have changed heights; refresh coordinates
+    // from the settled records even when a further visibility pass is pending.
+    std::int32_t settled_top = 0;
+    std::size_t settled_index = 0;
     for (std::size_t i = 0; i < wanted_count; ++i) {
-        if (assigned[i]) continue;
-        for (std::size_t j = 0; j < rows.size(); ++j) {
-            if (!used[j]) { assigned[i] = &rows[j]; used[j] = true; break; }
-        }
+        while (settled_index < wanted[i]) settled_top += layout[settled_index++].height;
+        positions[i] = settled_top;
     }
+    const auto content_height = std::max<int>(chat_height, total_height);
+    if (lv_obj_get_height(content) != content_height) lv_obj_set_height(content, content_height);
     for (std::size_t i = 0; i < wanted_count; ++i) {
         auto &row = *assigned[i];
         const auto &item = layout[wanted[i]];
@@ -1174,6 +1329,11 @@ void consume_contact() {
     gesture_cancelled = true;
     modal_pressed_button = nullptr;
 }
+bool pointer_contact_active() {
+    for (auto *input = lv_indev_get_next(nullptr); input; input = lv_indev_get_next(input))
+        if (lv_indev_get_type(input) == LV_INDEV_TYPE_POINTER && input->proc.state == LV_INDEV_STATE_PR) return true;
+    return false;
+}
 
 bool read_only() { return read_only_profile || moderation_caps.read_only; }
 
@@ -1209,7 +1369,8 @@ void reset_chat_history() {
     total_height = 0;
     scroll_y = 0;
     history_expired = false;
-    for (auto &row : rows) row.sequence = 0;
+    for (auto &row : rows) { release_row_images(row); row.sequence = 0; }
+    catalog_scan_active = false;
     layout_dirty = true;
     follow_dirty = true;
 }
@@ -1220,6 +1381,7 @@ const char *moderation_block_reason_for(const forearm::ModerationRequest &target
                                       bool metadata_verified, forearm::ModerationAction action,
                                       bool message_deleted, std::uint32_t target_profile) {
     if (read_only()) return "Read-only profile. Moderation is disabled.";
+    if (!authenticated) return "Connect Twitch to moderate.";
     if (target_profile != profile_generation) return "Account or channel changed. Select again.";
     if (moderation_pending) return "Another action is waiting for Twitch.";
     if (demo) return "Demo messages cannot be moderated.";
@@ -1313,8 +1475,10 @@ void selection_heading(lv_obj_t *panel, const char *title, const char *author_na
     label(panel, title, 14, 14, width - 28, &lv_font_montserrat_20, kViolet);
     auto *author = label(panel, author_name, 14, 45, width - 28, &message_font, kText);
     lv_label_set_long_mode(author, LV_LABEL_LONG_SCROLL_CIRCULAR);
-    lv_obj_set_height(author, 32);
-    auto *name = label(panel, channel_name, 14, 83, width - 28, &lv_font_montserrat_20, kMuted);
+    const int author_height = std::max<int>(32, lv_font_get_line_height(&message_font));
+    lv_obj_set_height(author, author_height);
+    const int channel_y = std::max(83, 45 + author_height + 6);
+    auto *name = label(panel, channel_name, 14, channel_y, width - 28, &lv_font_montserrat_20, kMuted);
     lv_label_set_long_mode(name, LV_LABEL_LONG_DOT);
     lv_obj_set_height(name, 28);
 }
@@ -1356,7 +1520,8 @@ void show_selection(std::uint64_t sequence) {
     std::snprintf(moderation_target.user_id, sizeof(moderation_target.user_id), "%s", selected->user_id.c_str());
     moderation_target.received_at_ms = selected->received_at_ms;
     std::snprintf(selected_author, sizeof(selected_author), "%s", display_author(*selected));
-    std::snprintf(selected_channel, sizeof(selected_channel), "%s", channel);
+    if (*channel) std::snprintf(selected_channel, sizeof(selected_channel), "%s", channel);
+    else std::snprintf(selected_channel, sizeof(selected_channel), "Channel %s", selected->channel_id.c_str());
     selected_metadata_verified = false;
     for (std::size_t i = 0; i < kHistory; ++i) {
         const auto &item = layout[i];
@@ -1673,7 +1838,7 @@ void account_event(lv_event_t *) {
     lv_obj_set_style_bg_color(details, color(kMuted), LV_PART_SCROLLBAR);
     lv_obj_set_style_bg_opa(details, LV_OPA_70, LV_PART_SCROLLBAR);
     lv_obj_set_style_radius(details, 2, LV_PART_SCROLLBAR);
-    auto *channel_name = label(details, channel, 14, 0, width - 28, &lv_font_montserrat_28, kText);
+    auto *channel_name = label(details, *channel ? channel : "Not configured", 14, 0, width - 28, &lv_font_montserrat_28, kText);
     lv_label_set_long_mode(channel_name, LV_LABEL_LONG_DOT); lv_obj_set_height(channel_name, 36);
     settings_account = label(details, authenticated ? account_name : "Not connected to Twitch", 14, 44,
                           width - 28, ascii_author_font, kText);
@@ -1901,7 +2066,7 @@ void app_ui_tick() {
             } else app_ui_show_setup("Connect Twitch", "Configure Wi-Fi and a public Twitch Client ID over USB first.");
         }
     }
-    if (account_refresh && !scale_contact) {
+    if (account_refresh && !scale_contact && !pointer_contact_active()) {
         account_refresh = false;
         if (account_visible) {
             consume_contact();
@@ -1935,13 +2100,20 @@ void app_ui_tick() {
         app_ui_demo_burst(1);
     }
     const auto cache = emote_cache_stats();
-    if (cache.ready != last_ready_emotes) {
+    if (cache.generation != last_media_generation || cache.ready != last_ready_emotes) {
+        last_media_generation = cache.generation;
         last_ready_emotes = cache.ready;
         // Compact only verified occurrences once when their assets arrive.
         // Preserve the paused message anchor while recalculating row heights.
         refresh_visible_emotes();
     }
-    if (!layout_dirty && !follow_dirty) return;
+    if (cache.catalog_generation != last_catalog_generation) {
+        last_catalog_generation = cache.catalog_generation;
+        catalog_scan_active = true; catalog_scan_sequence = 0;
+    }
+    // At most one bounded message enrichment per UI tick, never all512 records.
+    refresh_one_catalog_message();
+    if (!layout_dirty && !follow_dirty) { request_visible_media(); return; }
     const auto layout_start = esp_timer_get_time();
     update_guard = true;
     lv_obj_set_height(content, std::max<int>(chat_height, total_height));
@@ -1959,8 +2131,9 @@ void app_ui_tick() {
     record(layout_duration, static_cast<std::uint32_t>(first_layout_us + esp_timer_get_time() - second_layout_start));
     update_guard = false;
     synchronize_anchor();
-    layout_dirty = false;
+    layout_dirty = media_replan_pending;
     follow_dirty = false;
+    request_visible_media();
     update_status();
 }
 
@@ -1992,6 +2165,13 @@ bool app_ui_append(const char *channel_id, const char *message_id,
     item.sequence = message->sequence;
     item.height = measure_message(*message, nullptr, &item.author_height);
     total_height += layout[layout_count - 1].height;
+    // Transport events can have been collected before a catalog was published,
+    // then arrive after its history scan finishes. Revisit this new real row
+    // under the observed catalog without waiting for another catalog refresh.
+    if (!demo && !fixture_mode && last_catalog_generation) {
+        if (!catalog_scan_active) catalog_scan_sequence = item.sequence;
+        catalog_scan_active = true;
+    }
     layout_dirty = true;
     return true;
 }
@@ -2007,16 +2187,20 @@ bool app_ui_append_emotes(const char *channel_id, const char *message_id,
 
 void app_ui_set_message_emotes(const char *channel_id, const char *message_id,
                               const AppUiEmote *emotes, unsigned emote_count) {
-    if (!store || !channel_id || !message_id || !emotes || !emote_count) return;
+    if (!store || !channel_id || !message_id || (!emotes && emote_count)) return;
     for (std::size_t i = 0; i < layout_count; ++i) {
         const auto *message = store->at(i);
         if (message->channel_id.view() != channel_id || message->message_id.view() != message_id || message->deleted)
             continue;
         // Copy only exact identifiers. Image decode is asynchronous and no
         // network-owned event pointers survive this call.
-        void *memory = heap_caps_malloc(sizeof(EmoteRow), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-        if (!memory) return; // Original emote alt text remains fully readable.
-        auto *meta = new (memory) EmoteRow();
+        if (!emote_count && !layout[i].emotes) return;
+        EmoteRow *meta = nullptr;
+        if (emote_count) {
+            void *memory = heap_caps_malloc(sizeof(EmoteRow), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+            if (!memory) return; // Original emote alt text remains fully readable.
+            meta = new (memory) EmoteRow();
+        }
         for (unsigned j = 0; j < std::min<unsigned>(emote_count, 8); ++j) {
             if (!emotes[j].id || !emotes[j].text || !emotes[j].position_valid || !emotes[j].byte_length) continue;
             const auto len = strnlen(emotes[j].id, 129);
@@ -2038,13 +2222,13 @@ void app_ui_set_message_emotes(const char *channel_id, const char *message_id,
             meta->lengths[meta->count] = bytes;
             ++meta->count;
         }
-        if (!meta->count) { heap_caps_free(meta); return; }
-        update_emote_metrics(*meta);
+        if (meta && !meta->count) { heap_caps_free(meta); return; }
+        if (meta) update_emote_metrics(*meta);
         std::int32_t old_top = 0;
         const auto old_first = first_visible(&old_top);
         const auto old_offset = scroll_y - old_top;
-        if (layout[i].emotes) heap_caps_free(layout[i].emotes);
-        else ++emote_rows;
+        if (layout[i].emotes) { heap_caps_free(layout[i].emotes); if (!meta) --emote_rows; }
+        else if (meta) ++emote_rows;
         layout[i].emotes = meta;
         const auto old_height = layout[i].height;
         layout[i].height = measure_message(*message, meta, &layout[i].author_height);
@@ -2056,8 +2240,6 @@ void app_ui_set_message_emotes(const char *channel_id, const char *message_id,
         }
         ++layout[i].revision;
         invalidate_sprite(layout[i].sequence);
-        if (emote_cache_init())
-            for (unsigned j = 0; j < meta->count; ++j) emote_cache_request(meta->ids[j]);
         layout_dirty = true;
         return;
     }
@@ -2090,26 +2272,49 @@ void app_ui_set_status(const char *status) {
     update_status();
 }
 void app_ui_set_network(const char *status) {
-    std::snprintf(network_status, sizeof(network_status), "%s", status ? status : "Offline");
+    const auto *next = status ? status : "Offline";
+    if (!std::strcmp(network_status, next)) return;
+    std::snprintf(network_status, sizeof(network_status), "%s", next);
     transient_status[0] = 0;
+    account_refresh = true;
     update_status();
 }
 void app_ui_set_channel(const char *name) {
-    if (!name) return;
-    const auto *bare = name[0] == '#' ? name + 1 : name;
-    if (!*bare) return;
+    const auto *bare = name ? (name[0] == '#' ? name + 1 : name) : "";
     char next_channel[sizeof(channel)]{};
-    std::snprintf(next_channel, sizeof(next_channel), "#%s", bare);
+    const auto length = strnlen(bare, 26);
+    if (length > 25) return; // Never present a truncated profile identity.
+    for (std::size_t i = 0; i < length; ++i)
+        if (!((bare[i] >= 'a' && bare[i] <= 'z') || (bare[i] >= 'A' && bare[i] <= 'Z') ||
+              (bare[i] >= '0' && bare[i] <= '9') || bare[i] == '_')) return;
+    if (length) std::snprintf(next_channel, sizeof(next_channel), "#%s", bare);
     for (auto &c : next_channel) {
         if (!c) break;
         if (c >= 'A' && c <= 'Z') c += 'a' - 'A';
     }
     if (!std::strcmp(channel, next_channel)) return;
+    const bool reopen_settings = account_visible;
     std::memcpy(channel, next_channel, sizeof(channel));
     invalidate_profile_actions();
     // A new room cannot inherit another room's scrollback or selected target.
     // Same-room reconnects return above and preserve the reading position.
     reset_chat_history();
+    if (reopen_settings) settings_requested = true;
+}
+void app_ui_set_profile(const char *name, bool viewing_only) {
+    app_ui_set_read_only(viewing_only);
+    app_ui_set_channel(name);
+}
+const char *app_ui_channel() { return channel; }
+void app_ui_set_session(bool connected, const char *login) {
+    char next_name[sizeof(account_name)]{};
+    std::snprintf(next_name, sizeof(next_name), "%s", connected ? login && *login ? login : "Connected" : "Not connected");
+    if (authenticated == connected && !std::strcmp(account_name, next_name)) return;
+    const bool changed_account = authenticated != connected || (connected && std::strcmp(account_name, next_name));
+    authenticated = connected;
+    std::memcpy(account_name, next_name, sizeof(account_name));
+    if (changed_account) invalidate_profile_actions();
+    account_refresh = true;
 }
 void app_ui_set_read_only(bool enabled) {
     if (read_only_profile == enabled) return;
@@ -2127,8 +2332,7 @@ void app_ui_set_demo(bool enabled) {
     update_status();
 }
 void app_ui_set_authenticated(const char *name, const char *selected_channel) {
-    authenticated = true;
-    std::snprintf(account_name, sizeof(account_name), "%s", name ? name : "Connected");
+    app_ui_set_session(true, name);
     app_ui_set_demo(false);
     app_ui_set_channel(selected_channel ? selected_channel : name);
     app_ui_hide_login();

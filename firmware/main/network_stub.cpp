@@ -20,3 +20,5 @@ void twitch_request_disconnect_for_test(std::uint32_t) {}
 void twitch_request_wifi_disconnect_for_test(std::uint32_t) {}
 bool twitch_request_refresh_for_test() { return false; }
 void twitch_request_validation() {}
+bool twitch_expire_access_for_next_boot_for_test() { return false; }
+bool twitch_cancel_access_expiry_test() { return false; }

@@ -193,7 +193,7 @@
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
     "project/core/include/forearm/catalog_store.h": {
-      "sha256": "104ef64860114cfe32fb7af49acb29ecac8114736dca387cf9e9da0f4af824b7",
+      "sha256": "0196e9e28faca27b20aa2f02acee36db86139e94939f1615b999d83723e1c58d",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -220,7 +220,7 @@
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
     "project/core/include/forearm/device_login.h": {
-      "sha256": "cb7da00c36f19f7dae67f7770dbf01f6e2963664f25e491d24d1b4bee2cc4c56",
+      "sha256": "1d14eecea306ed968f14d5b44791ea65afc3e40d41075ee8cbf4f2f2f56f5838",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -264,6 +264,15 @@
       ],
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
+    "project/core/include/forearm/media_cache_policy.h": {
+      "sha256": "bc0f0cfd15559880c7671ef8ba6e9522879e8162fb1aedf35220861e7adbf151",
+      "license": "Apache-2.0",
+      "license_files": [
+        "LICENSES/Apache-2.0.txt",
+        "LICENSES/firmware-5.3.6/linked-source-notices.txt"
+      ],
+      "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
+    },
     "project/core/include/forearm/media_enrich.h": {
       "sha256": "9116570076ce6d380764b5e24d83340c74948f51572a2cdb444fcdb7a124ed90",
       "license": "Apache-2.0",
@@ -284,6 +293,15 @@
     },
     "project/core/include/forearm/seventv_catalog.h": {
       "sha256": "e64ef5e40bb0d68aa36b6b4edadd70add6f2363203cac9859ab16dbb3eeb1dc5",
+      "license": "Apache-2.0",
+      "license_files": [
+        "LICENSES/Apache-2.0.txt",
+        "LICENSES/firmware-5.3.6/linked-source-notices.txt"
+      ],
+      "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
+    },
+    "project/core/include/forearm/token_session.h": {
+      "sha256": "df8743d7d0dff40d980d172558b090567b88a99ac4e357aec43a99d73e2ed827",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -523,7 +541,7 @@
       "basis": "Explicit SPDX; select Apache alternative for Mbed TLS"
     },
     "project/firmware/main/app_ui.cpp": {
-      "sha256": "65bc9e94bc798dde01b5923b7997b5874e8239fcdf14795a7d59750995b1a3de",
+      "sha256": "d801f280ccb60d50f96b3c5c4ebd403c3245538ac8b2dbd699ddd8d5bd28d9ee",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -532,7 +550,7 @@
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
     "project/firmware/main/app_ui.h": {
-      "sha256": "df45ca66dd490f3369631cf4c211e548338414028c6a22bc7e831fb317d1c29f",
+      "sha256": "3bd87bab64bd063ae88856a2e47b11f3025f318f1a4b229dd02a4c69955c886f",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -559,7 +577,7 @@
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
     "project/firmware/main/emote_cache.cpp": {
-      "sha256": "1fd6797026043d23c9520a51443da7af5cbb952cdeb467f6a0f2111d38f2af15",
+      "sha256": "8aea8df2b91d0bbe5dc7839948cf95e94c328290019460e31c7f24ef95f08914",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -568,7 +586,7 @@
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
     "project/firmware/main/emote_cache.h": {
-      "sha256": "22addd72e956d29e40b59d12268dd14289e92df65f2a7baeb6c1e0f0a82d8adf",
+      "sha256": "7183b90cdba3f75611ac5741132191b7a86b547f025ec015086aa5e1d79f90d0",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -586,7 +604,7 @@
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
     "project/firmware/main/main.cpp": {
-      "sha256": "6be54135b136c83995a74f2ce00ba58e8cd1399655ecb27fd1da1e9c9c04b81e",
+      "sha256": "2989a0ef99f92da5f0d5a71dc2677c9f862ff33864e137f888f2c4a6e315bf54",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -613,7 +631,7 @@
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
     "project/firmware/main/twitch_client.cpp": {
-      "sha256": "31878cdb51dc92b9647d085d7c148a39d1852a4613049739b465a0bcde923736",
+      "sha256": "e7249aaac612daaff2c41b60b847decbc806ec055cdfcbcfdc98de8514d886aa",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -622,7 +640,7 @@
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
     "project/firmware/main/twitch_client.h": {
-      "sha256": "6051ecfa36b9199262bcbce333c798bdab770a63269ad80fc9580ef4f1008bcd",
+      "sha256": "2370e3f10b1cdcd5c7e60232a0164e588eb6c7e011cb76b8c70f10c61d92213c",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -19066,6 +19084,8 @@
     "Author-cache/drag-feedback review: only original Apache-2.0 app_ui.cpp/.h and main.cpp changed. The bounded author bitmap cache, native-glyph gutter and conservative backdrop guards, drag-state handling, and diagnostic bridge introduce no new third-party input. All 2001 input paths and every external SDK/toolchain/prebuilt/generated-configuration hash, canonical license evidence and 439 notice blocks are unchanged. Five exact reviewed Linux variants and provenance are retained. Build freshness checks passed; hardware performance and reliability require separate qualification.",
     "Instruction-cache32/PSRAM-layout review: the only changed generated inputs are application and bootloader sdkconfig.h, each replacing the 16KiB instruction-cache selection/size with 32KiB; all other configuration bytes are unchanged. Original Apache-2.0 app_ui.cpp/.h and main.cpp add profiling and move the value-initialized bounded layout table to PSRAM; the ineffective body-alignment experiment was removed. All 2001 input paths, external SDK/toolchain source and prebuilt hashes, canonical license evidence and 439 notice blocks are unchanged. Five exact Linux variants, provenance and prior review notes are preserved. Build freshness checks passed; this catalog does not itself qualify device performance/reliability or approve a release.",
     "Reviewed0.5.0 development media/sizing/startup inputs:24new original/helper/font inputs,10changed originalinputs;10additional correctly-sized OFL generatedfontnoticeblocks. All prior Linux variants retained unchanged. Twemoji PNG filename metadata only; runtime artwork and its CC BY4.0 notice are separate from original code.",
-    "Reviewed removal of all startup typography and its unused status API: only original Apache-2.0 startup/main sources changed; animation timing, touch ownership and dependencies are preserved. Existing source notices and reviewed platform variants are retained."
+    "Reviewed removal of all startup typography and its unused status API: only original Apache-2.0 startup/main sources changed; animation timing, touch ownership and dependencies are preserved. Existing source notices and reviewed platform variants are retained.",
+    "Reviewed 0.5.0-beta.1 persistence and media reliability candidate: two new original Apache-2.0 headers, eight original-source hash updates, no SDK/toolchain/font/license-family changes. All 449 existing notice blocks and five reviewed Linux variants are preserved.",
+    "Final 0.5.0-beta.1 source review: five original Apache-2.0 input hashes updated for generation-bound current login presentation and correctly sized modal author labels. No input paths, SDK/toolchain/font hashes, license evidence, notice blocks or reviewed platform variants changed. Final linked-image audit remains required."
   ]
 }

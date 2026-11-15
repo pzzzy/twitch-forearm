@@ -33,7 +33,17 @@ static lv_color_t tint_background(const lv_color_filter_dsc_t *, lv_color_t sour
 std::int64_t esp_timer_get_time() { return fake_us; }
 bool emote_cache_init() { return true; }
 bool emote_cache_request(const char *) { return true; }
-const lv_img_dsc_t *emote_cache_get(const char *id) { return !std::strcmp(id, "25") ? &emote : nullptr; }
+const lv_img_dsc_t *test_cached_asset(const char *id) { return !std::strcmp(id, "25") ? &emote : nullptr; }
+bool emote_cache_dimensions(const char* id,unsigned& width,unsigned& height) {
+    const auto* image=test_cached_asset(id);
+    width=image?image->header.w:0; height=image?image->header.h:0;
+    return width&&height;
+}
+const lv_img_dsc_t* emote_cache_acquire(const char* id){return test_cached_asset(id);}
+bool emote_cache_matches(const char* id,const lv_img_dsc_t* image){return image&&test_cached_asset(id)==image;}
+void emote_cache_release(const lv_img_dsc_t*){}
+unsigned emote_cache_collect(const char*,const char*,forearm::MediaOccurrence*,unsigned count,unsigned){return count;}
+
 EmoteCacheStats emote_cache_stats() { EmoteCacheStats stats{}; stats.ready = 1; return stats; }
 
 static void pump(unsigned ms = 48) {

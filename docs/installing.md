@@ -32,13 +32,15 @@ That erase clears the new project configuration/token/PHY/OTA selector area; it 
 
 ## Updating an existing Forearm Chat device
 
-For this unchanged partition layout, an application-only update preserves Wi-Fi, saved Twitch login and the channel/read-only profile:
+For this unchanged partition layout, an application-only update preserves the NVS containing Wi-Fi, saved Twitch login and the channel/read-only profile:
 
 ```sh
 python -m esptool --chip esp32s3 --port "$FOREARM_PORT" write_flash --flash_mode dio --flash_size 16MB --flash_freq 80m 0x30000 images/forearm_chat.bin
 ```
 
 Do not erase NVS or write a complete flash dump. Follow separate migration instructions if a future release changes partitions. Reserved OTA slots do not provide an OTA update service.
+
+The 0.5.0-beta.1 candidate reads compatible legacy token pairs and writes a versioned session journal on new authorization/refresh. An interrupted, corrupt or otherwise ambiguous saved session requires Connect Twitch again; it does not require erasing Wi-Fi/profile settings. Once the new journal is authoritative, older token keys are never used as fallback. Do not assume downgrading to older firmware understands the journal; arrange fresh login if rollback is necessary. The version's release evidence records which update/restart paths were actually tested.
 
 ## Configure and test
 
@@ -59,7 +61,9 @@ python tools/device.py --port "$FOREARM_PORT" status
 
 The same command switches an already paired device without entering Wi-Fi/client settings again or discarding its token pair. Check status for the resulting channel/profile and connection. A read-only profile blocks moderation even with older broad token grants and requests only chat-read permission on future login. It does not revoke the older Twitch grant. Changing rooms clears the previous room's RAM history; a same-room reconnect preserves it.
 
-Check readable output, complete sender names/login fallback, inline emotes, touch alignment, pause, scroll, Go live and message → Back before use. Read-only settings must remain visibly read only with disabled actions. A moderation-enabled profile must show the correct selected identity and separate confirmation; live action tests require an explicitly authorized owned/disposable target and complete cleanup. A watched read-only room is not a mutation-test target. Do not treat an ambiguous network result as confirmed failure or resend it automatically.
+Before authentication, Settings should already show the saved channel and read-only profile; an unconfigured device shows Not configured. If login cannot resume, read its reconnect reason and use Connect Twitch. A lost session clears the account label and disables unsafe controls while retaining the configured room. Credential storage is unencrypted; do not publish complete status recordings, flash dumps or real chat captures.
+
+Check readable output, complete sender names/login fallback, inline emotes, touch alignment, pause, scroll, single-tap Go live without a simultaneous arrival, Settings edges and message → Back before use. The Text size slider previews nine levels from 67% to 150% and saves on release; try the sizes you plan to use. Settings also offers Preview startup. Missing media should remain readable text and recover as assets become available. Read-only settings must remain visibly read only with disabled actions. A moderation-enabled profile must show the correct selected identity and separate confirmation; live action tests require an explicitly authorized owned/disposable target and complete cleanup. A watched read-only room is not a mutation-test target. Do not treat an ambiguous network result as confirmed failure or resend it automatically.
 
 ## Recovery
 

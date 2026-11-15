@@ -1,6 +1,8 @@
 #include "forearm/media_enrich.h"
 #include "forearm/seventv_catalog.h"
 #include "forearm/catalog_store.h"
+#include "forearm/media_cache_policy.h"
+#include <array>
 #include <cstdlib>
 #include <iostream>
 #include <string>
@@ -21,6 +23,56 @@ bool catalog(std::string_view input, bool global, std::vector<CatalogEmote>& out
     return parser.finish();
 }
 int main() {
+    // Long-session LRU: hundreds of distinct assets cannot exhaust the fixed
+    // table, while two independently held image leases prevent reuse.
+    std::array<MediaCacheSlot, 64> slots{};
+    auto at = [&](unsigned i) -> const MediaCacheSlot& { return slots[i]; };
+    for (unsigned i = 0; i < slots.size(); ++i) {
+        const auto victim = media_cache_victim(slots.size(), at);
+        CHECK(victim == static_cast<int>(i));
+        slots[i].state = MediaCacheState::Ready; slots[i].used = i + 1;
+    }
+    CHECK(media_cache_pin(slots[0], 65));
+    CHECK(media_cache_pin(slots[0], 66));
+    CHECK(media_cache_pin(slots[1], 67));
+    for (unsigned i = 0; i < 1000; ++i) {
+        const auto victim = media_cache_victim(slots.size(), at);
+        CHECK(victim >= 2 && victim < 64);
+        slots[victim] = {};
+        slots[victim].state = MediaCacheState::Downloading;
+        CHECK(!media_cache_pin(slots[victim], 68 + i));
+        CHECK(media_cache_victim(slots.size(), at) != victim);
+        slots[victim].state = MediaCacheState::Ready; slots[victim].used = 68 + i;
+    }
+    CHECK(media_cache_unpin(slots[0]) && slots[0].pins == 1);
+    CHECK(media_cache_victim(slots.size(), at) != 0);
+    CHECK(media_cache_unpin(slots[0]) && media_cache_victim(slots.size(), at) == 0);
+    CHECK(!media_cache_unpin(slots[0]));
+    for (auto& slot : slots) slot.pins = 1;
+    CHECK(media_cache_victim(slots.size(), at) == -1);
+    CHECK(media_cache_victim(slots.size(), at, true) == -1);
+    slots[7].pins = 0; slots[7].state = MediaCacheState::Failed;
+    CHECK(media_cache_victim(slots.size(), at) == 7);
+    CHECK(media_cache_victim(slots.size(), at, true) == -1);
+    // Failed viewport demand retries without another chat message. Three
+    // failures only increase the bounded delay; they never poison an ID forever.
+    MediaCacheSlot retry{}; retry.state = MediaCacheState::Failed;
+    for (unsigned attempt = 1; attempt <= 10; ++attempt) {
+        retry.attempts = attempt;
+        retry.retry_at_ms = 1000 + media_cache_retry_delay(attempt);
+        retry.wanted_until_ms = retry.retry_at_ms + 60000;
+        CHECK(!media_cache_retry_due(retry, retry.retry_at_ms - 1));
+        CHECK(media_cache_retry_due(retry, retry.retry_at_ms));
+        CHECK(media_cache_retry_delay(attempt) <= 300000);
+        CHECK(!media_cache_retry_due(retry, retry.wanted_until_ms));
+    }
+    retry.state = MediaCacheState::Waiting;
+    CHECK(!media_cache_retry_due(retry, retry.retry_at_ms));
+    // Transient HTTP/parse failures preserve a known-good same-room snapshot.
+    CHECK(catalog_retain_provider(false, true, true));
+    CHECK(!catalog_retain_provider(false, true, false)); // Different room.
+    CHECK(!catalog_retain_provider(false, false, true));
+    CHECK(!catalog_retain_provider(true, true, true)); // Valid empty is authoritative.
     char url[256];
     CHECK(media_url("25", url, sizeof(url)) && std::string_view(url).find("static-cdn.jtvnw.net/emoticons/v2/25/static/dark/1.0") != std::string_view::npos);
     CHECK(media_url("7tv:0123456789abcdef01234567:a", url, sizeof(url)) && std::string_view(url).find("1x_static.png") != std::string_view::npos);
@@ -67,6 +119,18 @@ int main() {
     CHECK(catalog_add(aliases, alias_count, 8, channel_alias));
     CHECK(!catalog_find(aliases, alias_count, "SYNTHETIC", true)->global);
     CHECK(catalog_find(aliases, alias_count, "SYNTHETIC", false)->global);
+    CatalogEmote refreshed[2]{}; unsigned refreshed_count = 0;
+    // Fresh globals + retained same-room aliases retain exact override priority.
+    CHECK(catalog_add(refreshed, refreshed_count, 2, global));
+    CHECK(catalog_append_provider(refreshed, refreshed_count, 2, aliases, alias_count, false));
+    std::sort(refreshed, refreshed + refreshed_count,
+        [](const auto& a, const auto& b) { return std::strcmp(a.name, b.name) < 0; });
+    CHECK(refreshed_count == 2 && !catalog_find(refreshed, refreshed_count, "SYNTHETIC", true)->global);
+    CHECK(catalog_find(refreshed, refreshed_count, "SYNTHETIC", false)->global);
+    const auto saved_count = refreshed_count;
+    const auto saved_alias = refreshed[1];
+    CHECK(!catalog_append_provider(refreshed, refreshed_count, 2, aliases, alias_count, false));
+    CHECK(refreshed_count == saved_count && !std::memcmp(&saved_alias, &refreshed[1], sizeof(saved_alias)));
     std::swap(aliases[0], aliases[1]); // Equal-name ordering cannot change selection.
     CHECK(!catalog_find(aliases, alias_count, "SYNTHETIC", true)->global);
     CHECK(catalog_find(aliases, alias_count, "SYNTHETIC", false)->global);
@@ -105,5 +169,5 @@ int main() {
     CHECK(count == 3 && std::string_view(occurrences[0].id) == "25");
     const std::string many = u8"😀 😀 😀 😀 😀 😀 😀 😀 😀 😀";
     CHECK(collect_media(many, occurrences, 0, 8, lookup) == 8);
-    std::cout << "Bounded provider JSON, exact emoji clusters, URLs, sizing and native-priority matching passed\n";
+    std::cout << "Bounded media LRU/leases/retries, provider retention/JSON, exact emoji, URLs and native priority passed\n";
 }
