@@ -1,8 +1,10 @@
 #include "app_ui.h"
 #include "emote_cache.h"
+#include "forearm_fonts.h"
 #include "lvgl.h"
 
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <cstdio>
 #include <cstring>
@@ -15,6 +17,7 @@ static unsigned submitted = 0;
 static unsigned login_requests = 0, upgrade_requests = 0;
 static forearm::ModerationRequest sent{};
 static forearm::ModerationCapabilities caps{};
+static std::array<lv_color_t, 320 * 480> framebuffer{};
 
 std::int64_t esp_timer_get_time() { return fake_us; }
 bool emote_cache_init() { return false; }
@@ -125,7 +128,12 @@ int main() {
     display.hor_res = 320;
     display.ver_res = 480;
     display.draw_buf = &draw_buffer;
-    display.flush_cb = [](lv_disp_drv_t *driver, const lv_area_t *, lv_color_t *) { lv_disp_flush_ready(driver); };
+    display.flush_cb = [](lv_disp_drv_t *driver, const lv_area_t *area, lv_color_t *colors) {
+        const auto width = lv_area_get_width(area);
+        for (int y = area->y1; y <= area->y2; ++y)
+            std::copy_n(colors + (y - area->y1) * width, width, framebuffer.data() + y * 320 + area->x1);
+        lv_disp_flush_ready(driver);
+    };
     lv_disp_drv_register(&display);
     lv_indev_drv_t input;
     lv_indev_drv_init(&input);
@@ -636,6 +644,34 @@ int main() {
     assert(lv_obj_has_state(button_named("Unban user"), LV_STATE_DISABLED));
     tap_button("Unban user"); assert(submitted == count);
     back_to_chat();
+    // Only copied chat text needs the composed font in Delete confirmation.
+    // Compare actual native pixels with the supported20px family; ASCII stays
+    // pixel-identical to the old base font and no final action is submitted.
+    app_ui_set_authenticated("Owner", "room");
+    app_ui_set_ui_scale(100); app_ui_set_read_only(false);
+    caps.read_only = false; caps.reason[0] = 0; ++caps.generation;
+    app_ui_set_moderation_capabilities(caps); pump(500);
+    const auto preview_submitted = submitted;
+    for (const auto *text : {"A plain ASCII message.", "😀 Καλημέρα Привет café"}) {
+        app_ui_go_live(); app_ui_set_demo(true); app_ui_set_demo(false);
+        assert(app_ui_append("100", "preview-font", "300", "Viewer", text, fake_us / 1000));
+        app_ui_set_message_moderation_metadata("100", "preview-font", "100", "preview-font", false);
+        app_ui_go_live(); pump(500); select_message(); confirm_action("Delete");
+        assert(submitted == preview_submitted);
+        auto *preview = find_label(lv_scr_act(), text); assert(preview);
+        lv_obj_invalidate(lv_scr_act()); lv_refr_now(nullptr); const auto actual = framebuffer;
+        lv_obj_set_style_text_font(preview, forearm_body_font_for_size(20), 0);
+        lv_obj_invalidate(lv_scr_act()); lv_refr_now(nullptr);
+        assert(!std::memcmp(actual.data(), framebuffer.data(), sizeof(framebuffer)));
+        if (!std::strcmp(text, "A plain ASCII message.")) {
+            lv_obj_set_style_text_font(preview, &lv_font_montserrat_20, 0);
+            lv_obj_invalidate(lv_scr_act()); lv_refr_now(nullptr);
+            assert(!std::memcmp(actual.data(), framebuffer.data(), sizeof(framebuffer)));
+        } else assert(forearm_font_supports_text(text));
+        assert(lv_obj_get_height(preview) == 76 && submitted == preview_submitted);
+        tap_button("Cancel"); pump(500); back_to_chat(); assert(submitted == preview_submitted);
+    }
+    std::puts("Delete preview pixels passed: supported emoji/Greek/Cyrillic/accented text uses composed20px, ASCII remains pixel-identical, and opening/cancelling confirmation sends no action.");
     std::puts("Read-only profile passed: full grants denied, settings upgrade absent, capability defense, held confirmation/Undo invalidated, no stale-profile callbacks, same-room history retained and changed-room history cleared.");
     std::puts("Floating settings target passed: dense-chat corner/edge taps, unchanged 52px circle, held-contact arrivals, jitter, drag/hold/slide rejection and overlay priority.");
     std::puts("Drag feedback passed: press/jitter keeps highlight, threshold-only cancellation and native scroll clear it without losing capture, releases never select, and a fresh tap still selects.");

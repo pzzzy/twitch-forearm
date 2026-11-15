@@ -1579,9 +1579,10 @@ void show_moderation_confirmation() {
     char target_detail[192];
     std::snprintf(target_detail, sizeof(target_detail), "User ID %s\nApplies when Twitch accepts.", moderation_target.user_id);
     const auto *selected = store ? store->selected() : nullptr;
-    const char *detail = reason ? reason : moderation_target.action == forearm::ModerationAction::DeleteMessage && selected ?
-                         selected->text.c_str() : target_detail;
-    auto *note = label(panel, detail, 14, 296, width - 28, &lv_font_montserrat_20, reason ? kAmber : kMuted);
+    const bool message_preview = !reason && moderation_target.action == forearm::ModerationAction::DeleteMessage && selected;
+    const char *detail = reason ? reason : message_preview ? selected->text.c_str() : target_detail;
+    const auto *detail_font = message_preview ? forearm_body_font_for_size(20) : &lv_font_montserrat_20;
+    auto *note = label(panel, detail, 14, 296, width - 28, detail_font, reason ? kAmber : kMuted);
     lv_label_set_long_mode(note, LV_LABEL_LONG_DOT);
     lv_obj_set_height(note, 76);
     label(panel, "No automatic retry.", 14, 382, width - 28, &lv_font_montserrat_16, kMuted);

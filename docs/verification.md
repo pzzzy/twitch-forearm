@@ -74,6 +74,18 @@ The rejected image's raw evidence is retained privately. New exact-image hardwar
 performance and soak results must be recorded separately; the host regression
 does not qualify the corrected binary.
 
+### Rejected confirmation-preview preflight — November 15
+
+Source `1cc11fda` was rejected before live moderation dispatch or its final soak
+when a device capture showed a missing-glyph box for supported emoji in the
+Delete confirmation's message preview. Chat and the selected-message view
+rendered that character; the copied confirmation text used a bare font.
+Only that preview now uses the composed 20 px family. Native-LVGL pixel checks
+cover emoji, Greek, Cyrillic and accents, preserve ASCII pixels and confirm that
+opening/cancelling the confirmation sends no action callback. Fixed English
+labels are unchanged. Earlier raw evidence remains private; corrected-image
+hardware and qualification results must be recorded separately.
+
 ## Historical source `54c1169c` — November 10: useful evidence, rejected soak
 
 The immutable baseline is source
