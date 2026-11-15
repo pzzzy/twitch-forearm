@@ -541,7 +541,7 @@
       "basis": "Explicit SPDX; select Apache alternative for Mbed TLS"
     },
     "project/firmware/main/app_ui.cpp": {
-      "sha256": "308844c19bb13eebfb3f518e08ebc5e91f2a814b799ab8caafd7cca2da3f59a3",
+      "sha256": "2f753002e4046d2dc9297ad391cbfc399b66c7bfb0c994606e4bdeb583ed2ece",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -19087,6 +19087,7 @@
     "Reviewed removal of all startup typography and its unused status API: only original Apache-2.0 startup/main sources changed; animation timing, touch ownership and dependencies are preserved. Existing source notices and reviewed platform variants are retained.",
     "Reviewed 0.5.0-beta.1 persistence and media reliability candidate: two new original Apache-2.0 headers, eight original-source hash updates, no SDK/toolchain/font/license-family changes. All 449 existing notice blocks and five reviewed Linux variants are preserved.",
     "Final 0.5.0-beta.1 source review: five original Apache-2.0 input hashes updated for generation-bound current login presentation and correctly sized modal author labels. No input paths, SDK/toolchain/font hashes, license evidence, notice blocks or reviewed platform variants changed. Final linked-image audit remains required.",
-    "Reviewed scaled-media origin correction: only original Apache-2.0 app_ui.cpp hash changes. The LVGL image pivot is restored after source assignment. All 2027 input paths, external hashes, 449 notice blocks and five platform variants are preserved; exact rebuilt-image audit and hardware qualification remain required."
+    "Reviewed scaled-media origin correction: only original Apache-2.0 app_ui.cpp hash changes. The LVGL image pivot is restored after source assignment. All 2027 input paths, external hashes, 449 notice blocks and five platform variants are preserved; exact rebuilt-image audit and hardware qualification remain required.",
+    "Reviewed moderation preview fallback correction: only original Apache-2.0 app_ui.cpp changes to use the existing composed20 font for copied message text. No font assets, input paths, external hashes, source notices or reviewed platform variants changed. Exact rebuilt-image audit and hardware qualification remain required."
   ]
 }
