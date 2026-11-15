@@ -1,10 +1,22 @@
 #pragma once
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <string_view>
 
 namespace forearm {
 enum class LoginPollResult : unsigned char { None, Pending, SlowDown, TransportError, RateLimited, Success, Denied };
+struct DeviceLoginFlow { std::uint32_t generation = 0; bool pending = false; };
+inline std::uint32_t next_login_generation(std::uint32_t current) { return current == UINT32_MAX ? 1 : current + 1; }
+// Fetch at delivery, not at the start of a UI tick: the worker may publish a
+// fresh QR event after that tick's earlier status snapshot. Generations reject
+// old flows even when another authorization is already pending.
+template<class CurrentFlow, class Present>
+bool dispatch_current_login(std::uint32_t event_generation, CurrentFlow current_flow, Present present) {
+    const auto current = current_flow();
+    if (!current.pending || !event_generation || event_generation != current.generation) return false;
+    present(); return true;
+}
 
 inline int login_hex(char c) {
     if (c >= '0' && c <= '9') return c - '0';

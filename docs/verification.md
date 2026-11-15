@@ -1,9 +1,9 @@
-# Native application verification — historical snapshot, November 10, 2026
+# Native application verification
 
 ## Evidence scope
 
-This source document preserves development results and failures at the snapshot
-date. It is not a live completion dashboard. For a downloadable hardware beta,
+This source document preserves dated development results and failures.
+It is not a live completion dashboard. For a downloadable hardware beta,
 the release-attached qualification summary and notes identify the tested source
 commit, application/image hashes, measurements and evidence scope. Those
 identities must match the package manifest. An outcome document added later must
@@ -24,7 +24,39 @@ their actual source/image rather than inferred from these pins.
 Battery, charging, temperature against skin and forearm mounting are
 **unqualified** in the agreed hardware-beta scope.
 
-## Historical source `54c1169c`: useful evidence, rejected soak
+## 0.5.0-beta.1 candidate — November 15, 2026
+
+The candidate adds nine live text/UI sizes, startup graphics, Twitch/7TV/color
+emoji, and saved-profile display before authentication. Session loss clears
+stale account/action state while retaining the configured room. A versioned
+atomic token journal replaces the old separate refresh-marker protocol, accepts
+safe legacy sessions, and requires fresh consent when recovery is ambiguous.
+
+Media now uses 64 reusable slots within 512 KiB. Visible LVGL objects own leases;
+unpinned LRU entries can retire, and recently desired failed assets can retry.
+Catalog refresh failure retains validated aliases for the correct room.
+Generation changes enrich retained history at most one message per UI tick,
+including a delayed event delivered after the generation scan has completed.
+The current Xtensa layout record is 32 bytes, so its 512-record lifetime PSRAM
+table occupies 16 KiB; the older 12 KiB table described below is historical.
+
+Actual-LVGL host tests cover pre-auth/offline room display, stale-grant denial,
+held-contact-safe Settings refresh, size/inline-name layout and image-source
+lifetime. A deliberately two-slot cache test exercises more than 64 distinct
+assets, detach-before-release, acquisition/readiness races, no-arrival recovery
+and bounded history enrichment. The delayed-event test fails with only the
+scanner rearm fix removed. The full suite includes 121 native/cached poisoned
+pixel comparisons. Earlier complete profile/lease tests passed ASan/UBSan;
+the narrow delayed-event addition also has focused sanitizer coverage.
+
+These are host contract results from this dated source snapshot. Exact-source
+hosted CI, cold-boot/session recovery, media churn, warm/dense performance,
+physical controls and genuine one-hour active soak are required release gates.
+Only a matching release's notes and qualification summary report their final
+outcomes. Results from 0.4.0-beta.1 or the older snapshots below do not qualify
+this source.
+
+## Historical source `54c1169c` — November 10: useful evidence, rejected soak
 
 The immutable baseline is source
 `54c1169cb0695e5afe07b47466168f035ea056d7`, application image SHA-256

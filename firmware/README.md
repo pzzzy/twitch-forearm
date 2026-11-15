@@ -1,6 +1,6 @@
 # Native firmware
 
-This is the **0.4.0-beta.1 hardware beta** for the Guition JC3248W535 family. It drives AXS15231B display/touch, renders portrait chat with LVGL and connects directly to Twitch. Saved read-only profiles, positioned inline static emotes and full sender-name/login fallback are implemented. Guarded Delete, Timeout, Ban and confirmed Undo/Unban require a moderation-enabled profile and authorized channel role. A download's release notes and attached `qualification-summary.json` identify its tested source, image hash, measured results and evidence scope; historical [verification records](../docs/verification.md) do not qualify another image. Battery, charging, skin temperature and mounting are unqualified; this beta does not claim readiness for forearm wear.
+This is the **0.5.0-beta.1 hardware-beta source** for the Guition JC3248W535 family. It drives AXS15231B display/touch, renders portrait chat with LVGL and connects directly to Twitch. Saved read-only profiles, positioned inline Twitch/7TV/color-emoji images, full sender-name/login fallback, nine live text/UI sizes and startup graphics are implemented. Guarded Delete, Timeout, Ban and confirmed Undo/Unban require a moderation-enabled profile and authorized channel role. A download's release notes and attached `qualification-summary.json` identify its tested source, image hash, measured results and evidence scope; this source description and historical [verification records](../docs/verification.md) do not qualify another image. Battery, charging, skin temperature and mounting are unqualified; this beta does not claim readiness for forearm wear.
 
 ## Build and update
 
@@ -20,11 +20,13 @@ For an already initialized Forearm Chat board, identify its serial port and set 
 idf.py -C firmware -p "$FOREARM_PORT" flash
 ```
 
-The helper auto-selects only when exactly one Espressif USB `303a:1001` device is present. Otherwise, supply an explicit serial port with the helper’s global `--port` option before its action. App-only updates preserve Wi-Fi/token NVS when the partition layout is unchanged. Do not mass-erase a paired board during routine updates. The current app is approximately 1.9 MiB within a 4 MiB slot; the build reports the exact size.
+The helper auto-selects only when exactly one Espressif USB `303a:1001` device is present. Otherwise, supply an explicit serial port with the helper’s global `--port` option before its action. App-only updates preserve Wi-Fi/token NVS when the partition layout is unchanged. Do not mass-erase a paired board during routine updates. A development build with the expanded font families is approximately 3.9 MB within a 4 MiB slot (about 7% free); the build and package manifest report the exact size for each image.
 
 ## Storage and recovery
 
-The installed layout reserves two 4 MiB application slots, separate 64 KiB token NVS and 4 MiB assets. Reserved OTA slots do not themselves provide an OTA update service. Wi-Fi setup and the saved channel/read-only profile use default NVS. The configuration decoder accepts the deployed 196-byte record and the new 197-byte record with an explicit profile byte; subsequent writes are committed and read back without resetting saved credentials. Twitch stores one token-pair blob in token NVS and verifies it before accepting a rotation.
+The installed layout reserves two 4 MiB application slots, separate 64 KiB token NVS and 4 MiB assets. Reserved OTA slots do not themselves provide an OTA update service. Wi-Fi setup and the saved channel/read-only profile use default NVS. The configuration decoder accepts the deployed 196-byte record and the new 197-byte record with an explicit profile byte; subsequent writes are committed and read back without resetting saved credentials. The configured profile is published to Settings before authentication, including offline/relogin states; an actual channel change clears old room history and selections.
+
+Twitch token NVS uses a versioned, checksummed journal coupling the pair, generation and refresh phase. Pending is committed before refresh; a replacement Ready record is committed and read back before use. Legacy pairs remain readable only before a journal becomes authoritative. An interrupted, corrupt, missing migrated or ambiguous session requires fresh consent with a visible reason. Logout writes a signed-out tombstone before old-key cleanup. This is failure-aware persistence, not encryption; app-only updates preserve storage but cannot make an invalid session valid.
 
 The reference unit's factory-to-project migration was performed after a verified full 16 MiB backup. Its image, original partitions, hashes and recovery notes remain private under `../.local/hardware-2026-11-10/`; they are not part of the public repository or transferable to another board. A flash image excludes the microSD card. Firmware does not mount, format or modify that card.
 
@@ -33,11 +35,12 @@ NVS and backups are unencrypted. A separate token partition does not prevent phy
 ## Source ownership
 
 - `board_display.cpp`: board initialization, full-frame transport, touch sampling and instrumentation. Panel initialization and RAMWR/RAMWRC continuation live in `components/forearm_panel`, with upstream notices retained.
-- `app_ui.cpp`: single-owner LVGL UI, inline emote layout, complete sender-name fallback and bounded PSRAM history, with stable pause/selection identities and an independent read-only guard.
+- `app_ui.cpp`: single-owner LVGL UI, saved-profile/session display, nine-size live relayout, inline media layout, complete sender-name fallback and bounded PSRAM history, with stable pause/selection identities and an independent read-only guard. Visible media leases detach before release; catalog enrichment is paced at one retained message per tick.
 - `twitch_client.cpp`: Wi-Fi, SNTP, verified TLS, profile-aware Public Device Code OAuth, token lifecycle, exact fragment/sender metadata, EventSub and permission-gated asynchronous Helix moderation. The worker enforces read-only profiles independently of token grants. Copied events use a PSRAM-backed queue; network code does not call UI object APIs.
-- `emote_cache.cpp`: fixed-origin static PNG downloads and bounded background decode, publishing immutable descriptors without evicting in-use pixels.
+- `emote_cache.cpp`: fixed-origin static Twitch/7TV and commit-pinned Twemoji PNG downloads and bounded background decode. Sixty-four reusable slots share a 512 KiB decoded-pixel budget; unpinned LRU entries can retire, visible demand retries failures, and validated catalog snapshots survive transient refresh failures for the matching channel.
 - `main.cpp`: UI owner and USB protocol dispatcher. Physical touch samples and injected diagnostic input have separate telemetry.
-- `components/forearm_fonts`: precompiled 24 px text and monochrome emoji fallbacks, source hashes and licenses.
+- `components/forearm_fonts`: nine precompiled body families (16/18/20/22/24/28/30/32/36 px), matching extended-text fallbacks and 16/20/24 px monochrome emoji fallbacks, source hashes and licenses. Runtime color images replace supported exact emoji sequences; compiled fonts remain the unavailable-image fallback.
+- `startup_animation.cpp`: temporary nonblocking graphical startup/preview overlay, with contact consumption before restoring the chat beneath it.
 
 See [native runtime](../docs/native-runtime.md) for behavior and limits. Provision credentials at runtime with `../tools/device.py setup`; do not add them to source or build flags.
 
@@ -55,8 +58,10 @@ Body sprites have 32 entries within 2 MiB. The independent author cache has 16
 entries, a 256 KiB total budget and 64 KiB per-entry limit; it keys the complete
 rendered name, font and dimensions and pins visible entries. Building happens
 outside draw callbacks. Misses, allocation failures and unsupported pressed
-styles retain normal drawing. ASCII author text is 20 px, supported Unicode 24 px,
-wrapped within 224 px. These bounds do not establish frame rate.
+styles retain normal drawing. At the default size, ASCII author text is 20 px
+and supported Unicode 24 px, wrapped within 224 px. All nine size levels reflow
+chat and authors while keeping controls at least 44 px. These bounds do not
+establish frame rate.
 
 ## Checks
 

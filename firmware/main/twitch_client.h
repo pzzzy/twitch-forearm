@@ -4,6 +4,7 @@
 #include "forearm/moderation.h"
 #include "forearm/device_login.h"
 #include "forearm/media.h"
+#include "forearm/token_session.h"
 
 // These messages contain displayable state only. Passwords and OAuth tokens are
 // intentionally absent. The network task never calls LVGL.
@@ -25,6 +26,7 @@ struct TwitchEvent {
     char text[2049]{};
     char verification_url[512]{};
     char user_code[32]{};
+    std::uint32_t login_generation = 0;
     TwitchEmote emotes[8]{};
     std::uint8_t emote_count = 0;
     bool connected = false;
@@ -42,6 +44,19 @@ struct TwitchStatus {
     bool chat_connected = false;
     bool login_pending = false;
     bool read_only = false;
+    bool profile_loaded = false; // Stored channel/profile is published before authentication.
+    bool credentials_saved = false, reconnect_required = false;
+    bool legacy_token_present = false, journal_token_present = false;
+    bool legacy_refresh_pending = false, journal_refresh_pending = false;
+    bool journal_authoritative = false;
+    forearm::TokenAuthorityState journal_authority_state = forearm::TokenAuthorityState::Absent;
+    std::uint32_t legacy_token_bytes = 0, journal_token_bytes = 0;
+    std::uint64_t token_generation = 0;
+    forearm::TokenLoadState token_load_state = forearm::TokenLoadState::Unchecked;
+    bool access_expiry_test_staged = false, access_expiry_test_boot = false;
+    std::uint32_t access_expiry_test_staged_count = 0;
+    std::uint32_t token_validation_count = 0, validation_unauthorized = 0;
+    int last_validation_http_status = 0;
     std::uint32_t received_messages = 0;
     std::uint32_t dropped_events = 0;
     std::uint32_t reconnects = 0;
@@ -54,6 +69,7 @@ struct TwitchStatus {
     std::uint32_t moderation_unknown = 0;
     std::uint32_t refresh_attempts = 0, refresh_succeeded = 0, refresh_failed = 0;
     std::uint32_t login_poll_count = 0, login_seconds_remaining = 0;
+    std::uint32_t login_generation = 0;
     int last_login_http_status = 0;
     forearm::LoginPollResult last_login_poll_result = forearm::LoginPollResult::None;
     bool moderation_delete_granted = false;
@@ -63,6 +79,7 @@ struct TwitchStatus {
     char broadcaster_id[33]{}; // Exact resolved destination, never a token.
     char login[33]{};
     char state[96]{};
+    char auth_reason[96]{}; // Constant diagnostic text; never a token/response body.
 };
 
 // Initialize the network worker once. Does not start a desktop bridge.
@@ -93,3 +110,8 @@ void twitch_request_wifi_disconnect_for_test(std::uint32_t duration_ms);
 // true means queued, never successful; no diagnostic is replayed after failure.
 bool twitch_request_refresh_for_test();
 void twitch_request_validation();
+// Explicit read-only diagnostic: persist a deliberately invalid access token,
+// preserving the exact refresh/client pair, then restart to test real401 recovery.
+// No automatic replay; cancel restores the still-valid runtime pair if aborted.
+bool twitch_expire_access_for_next_boot_for_test();
+bool twitch_cancel_access_expiry_test();

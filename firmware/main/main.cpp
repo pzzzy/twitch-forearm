@@ -206,7 +206,8 @@ void set_fixture_mode(bool enabled) {
         app_ui_set_status("Synthetic fixtures - no Twitch actions");
     } else {
         const auto network = twitch_status();
-        if (network.authenticated) app_ui_set_authenticated(network.login, network.channel);
+        if (network.profile_loaded) app_ui_set_profile(network.channel, network.read_only);
+        app_ui_set_session(network.authenticated, network.login);
         app_ui_set_network(network.state);
         char id[48]; snprintf(id,sizeof(id),"fixture-gap-%lu",static_cast<unsigned long>(++fixture_sequence));
         app_ui_append("system",id,"system","Fixture session ended",
@@ -342,6 +343,7 @@ void status(cJSON* response) {
 #undef UM
     flag(ui, "paused", u.paused); flag(ui, "demo", u.demo); flag(ui, "authenticated", u.authenticated);
     flag(ui,"fixture_mode",u.fixture_mode);
+    cJSON_AddStringToObject(ui,"channel",app_ui_channel());
     metric(ui,"ui_scale_percent",u.ui_scale_percent);
     flag(ui, "login_visible", u.login_visible); flag(ui, "selection_visible", u.selection_visible);
     flag(ui,"sprite_cache_enabled",u.sprite_cache_enabled);
@@ -356,6 +358,20 @@ void status(cJSON* response) {
     flag(net, "time_synchronized", t.time_synchronized); flag(net, "authenticated", t.authenticated);
     flag(net, "chat_connected", t.chat_connected); flag(net, "login_pending", t.login_pending);
     flag(net,"read_only",t.read_only);
+    flag(net,"profile_loaded",t.profile_loaded);
+    flag(net,"credentials_saved",t.credentials_saved);flag(net,"reconnect_required",t.reconnect_required);
+    metric(net,"token_load_state",static_cast<unsigned>(t.token_load_state));
+    cJSON_AddStringToObject(net,"auth_reason",t.auth_reason);
+    metric(net,"token_generation",t.token_generation);
+    flag(net,"access_expiry_test_staged",t.access_expiry_test_staged);flag(net,"access_expiry_test_boot",t.access_expiry_test_boot);
+    metric(net,"access_expiry_test_staged_count",t.access_expiry_test_staged_count);
+    metric(net,"token_validation_count",t.token_validation_count);metric(net,"validation_unauthorized",t.validation_unauthorized);
+    metric(net,"last_validation_http_status",t.last_validation_http_status);
+    flag(net,"legacy_token_present",t.legacy_token_present);flag(net,"journal_token_present",t.journal_token_present);
+    metric(net,"legacy_token_bytes",t.legacy_token_bytes);metric(net,"journal_token_bytes",t.journal_token_bytes);
+    flag(net,"legacy_refresh_pending",t.legacy_refresh_pending);flag(net,"journal_refresh_pending",t.journal_refresh_pending);
+    flag(net,"journal_authoritative",t.journal_authoritative);
+    metric(net,"journal_authority_state",static_cast<unsigned>(t.journal_authority_state));
     metric(net, "received_messages", t.received_messages); metric(net, "dropped_events", t.dropped_events);
     metric(net, "reconnects", t.reconnects); metric(net, "malformed_frames", t.malformed_frames);
     metric(net,"worker_stack_free",t.worker_stack_free);metric(net,"websocket_stack_free",t.websocket_stack_free);
@@ -364,6 +380,7 @@ void status(cJSON* response) {
     metric(net,"moderation_succeeded",t.moderation_succeeded);
     metric(net,"moderation_unknown",t.moderation_unknown);
     metric(net,"login_poll_count",t.login_poll_count);
+    metric(net,"login_generation",t.login_generation);
     metric(net,"last_login_http_status",t.last_login_http_status);
     metric(net,"last_login_poll_result",static_cast<unsigned>(t.last_login_poll_result));
     metric(net,"login_seconds_remaining",t.login_seconds_remaining);
@@ -381,6 +398,9 @@ void status(cJSON* response) {
     metric(cache,"requested",em.requested);metric(cache,"ready",em.ready);
     metric(cache,"failed",em.failed);metric(cache,"rejected",em.rejected);
     metric(cache,"downloads",em.downloads);metric(cache,"bytes",em.bytes);metric(cache,"decoded_bytes",em.decoded_bytes);
+    metric(cache,"generation",em.generation);metric(cache,"evicted",em.evicted);metric(cache,"pinned",em.pinned);
+    metric(cache,"lease_errors",em.lease_errors);metric(cache,"catalog_generation",em.catalog_generation);
+    metric(cache,"catalog_retained",em.catalog_retained);
     metric(cache,"catalog_entries",em.catalog_entries);metric(cache,"catalog_global_entries",em.catalog_global_entries);
     metric(cache,"catalog_channel_entries",em.catalog_channel_entries);metric(cache,"catalog_fetches",em.catalog_fetches);
     metric(cache,"catalog_failures",em.catalog_failures);metric(cache,"catalog_truncated",em.catalog_truncated);
@@ -417,6 +437,12 @@ void command(char* input) {
     else if (!strcmp(cmd,"wifi_disconnect")) twitch_request_wifi_disconnect_for_test(std::clamp(num(request,"duration_ms",5000),1000,30000));
     else if (!strcmp(cmd,"validate_login")) twitch_request_validation();
     else if (!strcmp(cmd,"refresh_login")) ok=twitch_request_refresh_for_test();
+    else if (!strcmp(cmd,"expire_access_for_next_boot")) {
+        const auto ui=app_ui_stats();
+        ok=!ui.moderation_pending && !ui.moderation_confirmation_visible && !ui.selection_visible &&
+            !ui.login_visible && twitch_expire_access_for_next_boot_for_test();
+    }
+    else if (!strcmp(cmd,"cancel_access_expiry_test")) ok=twitch_cancel_access_expiry_test();
     else if (!strcmp(cmd,"fixture_mode")) {
         const auto ui=app_ui_stats();
         ok=!ui.moderation_pending && !ui.moderation_confirmation_visible;
@@ -544,7 +570,20 @@ void usb_poll() {
     }
 }
 void network_events() {
-    app_ui_set_read_only(fixture_mode || twitch_status().read_only);
+    const auto network = twitch_status();
+    if (!fixture_mode) {
+        if (network.profile_loaded) app_ui_set_profile(network.channel, network.read_only);
+        app_ui_set_session(network.authenticated, network.login);
+        static char displayed_state[sizeof(network.state)]{};
+        const char* state = network.reconnect_required && !network.authenticated && !network.login_pending &&
+            network.wifi_connected && *network.auth_reason ? network.auth_reason : network.state;
+        if (strcmp(displayed_state, state)) {
+            snprintf(displayed_state, sizeof(displayed_state), "%s", state);
+            app_ui_set_network(state);
+        }
+        if (!network.login_pending) app_ui_hide_login();
+    }
+    app_ui_set_read_only(fixture_mode || network.read_only);
     app_ui_set_moderation_capabilities(fixture_mode?forearm::ModerationCapabilities{}:twitch_moderation_capabilities());
     TwitchEvent e;
     for (unsigned i=0;i<12 && twitch_next_event(e);++i) {
@@ -556,17 +595,30 @@ void network_events() {
         }
         switch(e.kind) {
             case TwitchEventKind::Status:
-                app_ui_set_network(e.text);
-                if (!twitch_status().login_pending) app_ui_hide_login();
                 break;
             case TwitchEventKind::Login:
-                snprintf(displayed_login_url,sizeof(displayed_login_url),"%s",e.verification_url);
-                snprintf(displayed_login_code,sizeof(displayed_login_code),"%s",e.user_code);
-                app_ui_set_login(e.verification_url,e.user_code); break;
+                forearm::dispatch_current_login(e.login_generation, [] {
+                    const auto current = twitch_status();
+                    return forearm::DeviceLoginFlow{current.login_generation, current.login_pending};
+                }, [&] {
+                    snprintf(displayed_login_url,sizeof(displayed_login_url),"%.*s",
+                             static_cast<int>(sizeof(displayed_login_url)-1),e.verification_url);
+                    snprintf(displayed_login_code,sizeof(displayed_login_code),"%.*s",
+                             static_cast<int>(sizeof(displayed_login_code)-1),e.user_code);
+                    app_ui_set_login(e.verification_url,e.user_code);
+                });
+                break;
             case TwitchEventKind::Authenticated:
-                app_ui_set_demo(false); app_ui_set_authenticated(e.display_name,e.text); app_ui_hide_login(); break;
+                if (network.authenticated) {
+                    app_ui_set_demo(false);
+                    app_ui_set_profile(network.channel, network.read_only);
+                    app_ui_set_session(true, network.login);
+                    app_ui_hide_login();
+                }
+                break;
             case TwitchEventKind::Chat:
                 {
+                    if (!*network.broadcaster_id || strcmp(e.channel_id, network.broadcaster_id)) break;
                     app_ui_set_demo(false);AppUiEmote emotes[8]{};
                     unsigned count=std::min<unsigned>(e.emote_count,8);
                     for(unsigned j=0;j<count;++j)emotes[j]={e.emotes[j].id,e.emotes[j].text,

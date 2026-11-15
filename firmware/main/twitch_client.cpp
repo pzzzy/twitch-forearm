@@ -42,22 +42,16 @@ constexpr char kRoleScope[] = "user:read:moderated_channels";
 constexpr char kConsentScopes[] = "user:read:chat moderator:manage:chat_messages moderator:manage:banned_users user:read:moderated_channels";
 constexpr char kWsUrl[] = "wss://eventsub.wss.twitch.tv/ws?keepalive_timeout_seconds=30";
 constexpr std::size_t kMaxJson = 32768;
-constexpr std::size_t kTokenBytes = 2049;
 
 using Configuration = forearm::DeviceConfiguration;
-enum class CommandKind { Configure, Login, Logout, Moderate, RefreshTest, WatchChannel };
+enum class CommandKind { Configure, Login, Logout, Moderate, RefreshTest, WatchChannel, StageAccessExpiryTest, CancelAccessExpiryTest };
 struct Command {
     CommandKind kind{};
     Configuration config{};
     forearm::ModerationRequest moderation{};
     std::int64_t submitted_ms = 0;
 };
-struct TokenRecord {
-    char access[kTokenBytes]{};
-    char refresh[kTokenBytes]{};
-    char client_id[65]{};
-    std::int64_t expires_epoch = 0;
-};
+using TokenRecord = forearm::TokenPair;
 struct RawFrame { int slot = 0; unsigned generation = 0; char* json = nullptr; };
 struct WsContext {
     esp_websocket_client_handle_t handle = nullptr;
@@ -91,11 +85,15 @@ forearm::ModerationCapabilities moderation_caps{};
 forearm::ModerationLedger moderation_ledger;
 Configuration configuration{};
 TokenRecord tokens{};
+std::uint64_t token_generation = 0;
+enum class TokenResponseFailure { None, Response, Scope, Storage };
+TokenResponseFailure token_response_failure = TokenResponseFailure::None;
 std::atomic<bool> wifi_connected{false};
 std::atomic<std::uint32_t> queue_drops{0};
 std::atomic<std::uint32_t> malformed{0};
 std::atomic<bool> http_active{false};
 std::atomic<bool> refresh_test_pending{false};
+std::atomic<bool> access_test_command_pending{false}, access_test_staged{false};
 std::atomic<bool> read_only_enforced{false};
 std::atomic<bool> force_validation{false};
 std::atomic<std::uint32_t> disconnect_test_ms{0};
@@ -335,56 +333,181 @@ void config_load() {
         configuration = value;
     nvs_close(handle);
 }
-void tokens_forget() {
-    invalidate_moderation("Twitch login required");
-    tokens = TokenRecord{};
-    account_validated = false;
-    account_id[0] = broadcaster_id[0] = 0;
+void publish_auth_load(forearm::TokenLoadState state, const char* reason = nullptr) {
+    portENTER_CRITICAL(&state_mux);
+    visible_state.token_load_state = state;
+    visible_state.credentials_saved = forearm::token_load_ready(state);
+    visible_state.reconnect_required = !forearm::token_load_ready(state);
+    visible_state.token_generation = token_generation;
+    copy_text(visible_state.auth_reason, reason ? reason : forearm::token_load_text(state));
+    portEXIT_CRITICAL(&state_mux);
+}
+void tokens_drop_runtime(forearm::TokenLoadState state, const char* reason = nullptr) {
+    tokens = TokenRecord{}; account_validated = false;
+    account_id[0] = broadcaster_id[0] = 0; grant_delete = grant_ban = grant_role = false;
     set_auth_state(false);
-    nvs_handle_t handle;
-    if (nvs_open_from_partition("tokens", "twitch", NVS_READWRITE, &handle) == ESP_OK) {
-        nvs_erase_key(handle, "pair");
-        nvs_erase_key(handle, "pending");
-        nvs_commit(handle);
-        nvs_close(handle);
+    invalidate_moderation(reason ? reason : forearm::token_load_text(state));
+    publish_auth_load(state, reason);
+}
+bool write_token_journal(const TokenRecord& value, std::uint64_t generation, forearm::TokenSessionPhase phase) {
+    // Keep both large byte buffers out of the worker's internal stack. One NVS
+    // blob atomically couples the pair, generation and refresh phase.
+    auto* memory = static_cast<std::uint8_t*>(heap_caps_malloc(forearm::kTokenSessionBytes * 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    if (!memory) return false;
+    auto* checked = memory + forearm::kTokenSessionBytes;
+    if (!forearm::encode_token_session(value, generation, phase, memory, forearm::kTokenSessionBytes)) {
+        heap_caps_free(memory); return false;
     }
+    nvs_handle_t handle;
+    if (nvs_open_from_partition("tokens", "twitch", NVS_READWRITE, &handle) != ESP_OK) { heap_caps_free(memory); return false; }
+    std::uint8_t authority = 0;
+    const auto marker_result = nvs_get_u8(handle, "journal_seen", &authority);
+    bool okay = marker_result == ESP_OK && authority == 1;
+    if (!okay && (marker_result == ESP_OK || marker_result == ESP_ERR_NVS_NOT_FOUND || marker_result == ESP_ERR_NVS_TYPE_MISMATCH)) {
+        okay = nvs_set_u8(handle, "journal_seen", 1) == ESP_OK && nvs_commit(handle) == ESP_OK &&
+            nvs_get_u8(handle, "journal_seen", &authority) == ESP_OK && authority == 1;
+    }
+    // Sticky authority is durable before accepting a new session or sending
+    // any one-time refresh. If NVS sanitizes a damaged/missing blob index later,
+    // legacy credentials still cannot be resurrected as an unsafe fallback.
+    if (okay) {
+        portENTER_CRITICAL(&state_mux);
+        visible_state.journal_authoritative = true; visible_state.journal_authority_state = forearm::TokenAuthorityState::Present;
+        portEXIT_CRITICAL(&state_mux);
+    }
+    okay = okay && nvs_set_blob(handle, "session", memory, forearm::kTokenSessionBytes) == ESP_OK && nvs_commit(handle) == ESP_OK;
+    std::size_t bytes = forearm::kTokenSessionBytes;
+    okay = okay && nvs_get_blob(handle, "session", checked, &bytes) == ESP_OK && bytes == forearm::kTokenSessionBytes &&
+           !std::memcmp(memory, checked, bytes);
+    nvs_close(handle); heap_caps_free(memory);
+    if (okay) {
+        token_generation = generation;
+        portENTER_CRITICAL(&state_mux);
+        visible_state.journal_token_present = true; visible_state.journal_token_bytes = forearm::kTokenSessionBytes;
+        visible_state.journal_refresh_pending = phase == forearm::TokenSessionPhase::RefreshPending;
+        visible_state.token_generation = generation;
+        portEXIT_CRITICAL(&state_mux);
+    }
+    return okay;
 }
 bool tokens_save(const TokenRecord& value) {
-    nvs_handle_t handle;
-    if (nvs_open_from_partition("tokens", "twitch", NVS_READWRITE, &handle) != ESP_OK) return false;
-    bool okay = nvs_set_blob(handle, "pair", &value, sizeof(value)) == ESP_OK && nvs_commit(handle) == ESP_OK;
-    TokenRecord checked{};
-    std::size_t bytes = sizeof(checked);
-    okay = okay && nvs_get_blob(handle, "pair", &checked, &bytes) == ESP_OK && bytes == sizeof(checked) &&
-           !std::memcmp(&value, &checked, sizeof(value));
-    if (okay) {
-        const auto erased = nvs_erase_key(handle, "pending");
-        okay = (erased == ESP_OK || erased == ESP_ERR_NVS_NOT_FOUND) && nvs_commit(handle) == ESP_OK;
-    }
-    nvs_close(handle);
-    return okay;
+    std::uint64_t next = 0;
+    if (!forearm::next_token_generation(token_generation, next) ||
+        !write_token_journal(value, next, forearm::TokenSessionPhase::Ready)) return false;
+    // Ready(G+1) is the durable completion record. Stale legacy pending keys
+    // cannot invalidate it; no second pending-clear commit exists.
+    publish_auth_load(forearm::TokenLoadState::JournalReady);
+    return true;
 }
 bool mark_refresh_pending() {
-    nvs_handle_t handle;
-    if (nvs_open_from_partition("tokens", "twitch", NVS_READWRITE, &handle) != ESP_OK) return false;
-    const bool okay = nvs_set_u8(handle, "pending", 1) == ESP_OK && nvs_commit(handle) == ESP_OK;
-    nvs_close(handle);
-    return okay;
+    const auto generation = token_generation ? token_generation : 1;
+    return write_token_journal(tokens, generation, forearm::TokenSessionPhase::RefreshPending);
 }
 void tokens_load() {
     nvs_handle_t handle;
-    if (nvs_open_from_partition("tokens", "twitch", NVS_READONLY, &handle) != ESP_OK) return;
+    const auto opened = nvs_open_from_partition("tokens", "twitch", NVS_READONLY, &handle);
+    if (opened != ESP_OK) {
+        publish_auth_load(opened == ESP_ERR_NVS_NOT_FOUND ? forearm::TokenLoadState::NoSession : forearm::TokenLoadState::StorageUnavailable);
+        return;
+    }
+    std::size_t journal_bytes = 0, legacy_bytes = 0;
+    const auto journal_result = nvs_get_blob(handle, "session", nullptr, &journal_bytes);
+    const auto legacy_result = nvs_get_blob(handle, "pair", nullptr, &legacy_bytes);
+    const bool journal_present = journal_result != ESP_ERR_NVS_NOT_FOUND;
+    const bool legacy_present = legacy_result != ESP_ERR_NVS_NOT_FOUND;
     std::uint8_t pending = 0;
-    const bool interrupted = nvs_get_u8(handle, "pending", &pending) == ESP_OK && pending;
-    TokenRecord value{};
-    std::size_t bytes = sizeof(value);
-    const bool valid = nvs_get_blob(handle, "pair", &value, &bytes) == ESP_OK && bytes == sizeof(value) &&
-        value.access[kTokenBytes-1] == 0 && value.refresh[kTokenBytes-1] == 0 && value.client_id[64] == 0;
+    const auto pending_result = nvs_get_u8(handle, "pending", &pending);
+    const bool marker_valid = pending_result == ESP_OK || pending_result == ESP_ERR_NVS_NOT_FOUND;
+    std::uint8_t authority_value = 0;
+    const auto authority_result = nvs_get_u8(handle, "journal_seen", &authority_value);
+    const auto authority = authority_result == ESP_ERR_NVS_NOT_FOUND ? forearm::TokenAuthorityState::Absent :
+        authority_result == ESP_OK ? (authority_value == 1 ? forearm::TokenAuthorityState::Present : forearm::TokenAuthorityState::Invalid) :
+        authority_result == ESP_ERR_NVS_TYPE_MISMATCH ? forearm::TokenAuthorityState::Invalid : forearm::TokenAuthorityState::Unavailable;
+    portENTER_CRITICAL(&state_mux);
+    visible_state.legacy_token_present = legacy_present; visible_state.journal_token_present = journal_present;
+    visible_state.legacy_token_bytes = legacy_bytes; visible_state.journal_token_bytes = journal_bytes;
+    visible_state.legacy_refresh_pending = pending_result == ESP_OK && pending;
+    visible_state.journal_authoritative = authority == forearm::TokenAuthorityState::Present;
+    visible_state.journal_authority_state = authority;
+    portEXIT_CRITICAL(&state_mux);
+    const bool read_journal = journal_present && journal_result == ESP_OK && journal_bytes == forearm::kTokenSessionBytes;
+    const bool read_legacy = !journal_present && legacy_present && legacy_result == ESP_OK && legacy_bytes == forearm::kLegacyTokenPairBytes;
+    const auto size = read_journal ? journal_bytes : read_legacy ? legacy_bytes : 0;
+    auto* stored = size ? static_cast<std::uint8_t*>(heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)) : nullptr;
+    bool read_okay = !size;
+    if (stored) {
+        auto bytes = size;
+        read_okay = nvs_get_blob(handle, read_journal ? "session" : "pair", stored, &bytes) == ESP_OK && bytes == size;
+    }
     nvs_close(handle);
-    if (valid && !interrupted && !std::strcmp(value.client_id, configuration.client_id)) tokens = value;
-    else if (interrupted) state_message("Login needed after interrupted token refresh");
+    forearm::TokenSessionInfo info;
+    auto state = forearm::TokenLoadState::StorageUnavailable;
+    if (read_okay) {
+        state = forearm::recover_token_session(journal_present, read_journal ? stored : nullptr, journal_bytes,
+            legacy_present, read_legacy ? stored : nullptr, legacy_bytes, pending_result == ESP_OK && pending,
+            marker_valid, configuration.client_id, tokens, info, authority);
+    } else tokens = TokenRecord{}; // Never consume bytes from an unsuccessful NVS read.
+    heap_caps_free(stored); token_generation = info.generation;
+    portENTER_CRITICAL(&state_mux); visible_state.journal_refresh_pending = journal_present && info.pending; portEXIT_CRITICAL(&state_mux);
+    publish_auth_load(state); logged_out = state == forearm::TokenLoadState::SignedOut;
+    portENTER_CRITICAL(&state_mux);
+    visible_state.access_expiry_test_boot = forearm::token_load_ready(state) && !std::strcmp(tokens.access, forearm::kDiagnosticInvalidAccess);
+    portEXIT_CRITICAL(&state_mux);
+}
+void tokens_logout() {
+    // Keep an empty authoritative tombstone while old-format keys are removed.
+    // A power cut during cleanup cannot resurrect legacy credentials.
+    std::uint64_t next = 0;
+    const bool tombstone = forearm::next_token_generation(token_generation, next) &&
+        write_token_journal(tokens, next, forearm::TokenSessionPhase::SignedOut);
+    if (tombstone) {
+        nvs_handle_t handle;
+        if (nvs_open_from_partition("tokens", "twitch", NVS_READWRITE, &handle) == ESP_OK) {
+            nvs_erase_key(handle, "pair"); nvs_erase_key(handle, "pending"); nvs_commit(handle); nvs_close(handle);
+        }
+    }
+    tokens_drop_runtime(tombstone ? forearm::TokenLoadState::SignedOut : forearm::TokenLoadState::StorageUnavailable,
+        tombstone ? nullptr : "Signed out locally; credential storage could not confirm removal");
+    access_test_staged.store(false);
+    portENTER_CRITICAL(&state_mux); visible_state.access_expiry_test_staged = false; portEXIT_CRITICAL(&state_mux);
+}
+void stage_access_expiry_test() {
+    const auto state = twitch_status();
+    const bool pending_result = moderation_results && uxQueueMessagesWaiting(moderation_results);
+    if (access_test_staged.load() || !account_validated || !*tokens.refresh || !configuration.read_only ||
+        !forearm::can_stage_access_expiry_test(read_only_enforced.load(), state.authenticated,
+            state.login_pending || login_requested || *device_code, pending_result, tokens.expires_epoch, std::time(nullptr))) {
+        state_message("Access-expiry diagnostic rejected; use a fresh authenticated read-only session"); return;
+    }
+    auto* staged = static_cast<TokenRecord*>(heap_caps_malloc(sizeof(TokenRecord), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    if (!staged) { state_message("Access-expiry diagnostic could not allocate its bounded buffer"); return; }
+    std::memcpy(staged, &tokens, sizeof(tokens));
+    std::memset(staged->access, 0, sizeof(staged->access)); std::strcpy(staged->access, forearm::kDiagnosticInvalidAccess);
+    std::uint64_t next = 0;
+    access_test_staged.store(true); // Freeze automatic writes even if commit outcome is uncertain.
+    const bool okay = forearm::next_token_generation(token_generation, next) &&
+        write_token_journal(*staged, next, forearm::TokenSessionPhase::Ready);
+    heap_caps_free(staged);
+    const char* reason = okay ? "Access-expiry test staged; restart or cancel this diagnostic" :
+        "Access-expiry test write unconfirmed; cancel or restart to recover";
+    portENTER_CRITICAL(&state_mux);
+    visible_state.access_expiry_test_staged = true;
+    if (okay) ++visible_state.access_expiry_test_staged_count;
+    copy_text(visible_state.auth_reason, reason);
+    portEXIT_CRITICAL(&state_mux);
+    state_message(reason);
+}
+void cancel_access_expiry_test() {
+    if (!access_test_staged.load()) return;
+    if (!*tokens.refresh || !tokens_save(tokens)) {
+        state_message("Access-expiry test cancellation could not be saved; restart to recover"); return;
+    }
+    access_test_staged.store(false);
+    portENTER_CRITICAL(&state_mux); visible_state.access_expiry_test_staged = false; portEXIT_CRITICAL(&state_mux);
+    state_message("Access-expiry test cancelled; saved session restored");
 }
 bool token_response(const HttpResult& response) {
+    token_response_failure = TokenResponseFailure::Response;
     if (!response.ok || response.status != 200) return false;
     auto* json = cJSON_ParseWithLength(response.body.c_str(), response.body.size() + 1);
     if (!json) return false;
@@ -396,9 +519,11 @@ bool token_response(const HttpResult& response) {
         copy_exact(value.client_id, configuration.client_id) && expiry > 0 && scopes_ok;
     value.expires_epoch = static_cast<std::int64_t>(std::time(nullptr)) + expiry;
     cJSON_Delete(json);
-    // New pair is a single NVS blob; read it back before accepting the new token.
-    if (okay) okay = tokens_save(value);
+    if (!scopes_ok) token_response_failure = TokenResponseFailure::Scope;
+    // New pair and completion phase are one checked blob, never split commits.
+    if (okay) { okay = tokens_save(value); if (!okay) token_response_failure = TokenResponseFailure::Storage; }
     if (okay) { tokens = value; account_validated = false; invalidate_moderation("Validating granted permissions"); }
+    if (okay) token_response_failure = TokenResponseFailure::None;
     return okay;
 }
 
@@ -534,10 +659,14 @@ void reconnect_later(const char* message) {
     portENTER_CRITICAL(&state_mux); ++visible_state.reconnects; portEXIT_CRITICAL(&state_mux);
 }
 bool refresh_token() {
+    if (access_test_staged.load()) { state_message("Restart or cancel the staged access-expiry diagnostic first"); return false; }
     portENTER_CRITICAL(&state_mux); ++visible_state.refresh_attempts; portEXIT_CRITICAL(&state_mux);
     if (!*tokens.refresh || !mark_refresh_pending()) {
         portENTER_CRITICAL(&state_mux); ++visible_state.refresh_failed; portEXIT_CRITICAL(&state_mux);
-        state_message("Login needed: credential storage unavailable"); return false;
+        stop_sockets();
+        tokens_drop_runtime(forearm::TokenLoadState::StorageUnavailable,
+            "Reconnect required: refresh journal could not be saved");
+        state_message("Reconnect required: refresh journal could not be saved"); return false;
     }
     // Set persistent pending before the request because Public refresh tokens
     // are single-use. An ambiguous transport failure requires reauthorization.
@@ -545,8 +674,15 @@ bool refresh_token() {
         "client_id=" + form_escape(configuration.client_id) + "&grant_type=refresh_token&refresh_token=" + form_escape(tokens.refresh));
     if (!token_response(response)) {
         portENTER_CRITICAL(&state_mux); ++visible_state.refresh_failed; portEXIT_CRITICAL(&state_mux);
-        tokens_forget();
-        state_message("Login needed: refresh was denied or unconfirmed");
+        const char* reason = token_response_failure == TokenResponseFailure::Storage ?
+            "Reconnect required: refreshed credentials could not be saved" :
+            response.ok && (response.status == 400 || response.status == 401 || response.status == 403) ?
+            "Reconnect required: Twitch rejected the saved refresh token" :
+            "Reconnect required: token refresh outcome was unconfirmed";
+        stop_sockets();
+        tokens_drop_runtime(token_response_failure == TokenResponseFailure::Storage ? forearm::TokenLoadState::StorageUnavailable :
+            forearm::TokenLoadState::InterruptedRefresh, reason);
+        state_message(reason);
         return false;
     }
     portENTER_CRITICAL(&state_mux); ++visible_state.refresh_succeeded; portEXIT_CRITICAL(&state_mux);
@@ -619,6 +755,10 @@ void publish_moderation_capabilities(bool role_verified) {
 enum class Validation { Valid, TemporaryFailure, NeedsLogin };
 Validation validate_account(bool may_refresh = true) {
     auto response = request("https://id.twitch.tv/oauth2/validate", HTTP_METHOD_GET, {}, true, true);
+    portENTER_CRITICAL(&state_mux);
+    ++visible_state.token_validation_count; visible_state.last_validation_http_status = response.status;
+    if (response.ok && response.status == 401) ++visible_state.validation_unauthorized;
+    portEXIT_CRITICAL(&state_mux);
     if (response.ok && response.status == 401 && may_refresh && refresh_token()) return validate_account(false);
     if (!response.ok || response.status == 429 || response.status >= 500) return Validation::TemporaryFailure;
     if (response.status != 200) return Validation::NeedsLogin;
@@ -651,6 +791,8 @@ Validation validate_account(bool may_refresh = true) {
     publish_moderation_capabilities(verify_moderator_role());
     portENTER_CRITICAL(&state_mux);
     visible_state.authenticated = true;
+    visible_state.reconnect_required = false;
+    copy_text(visible_state.auth_reason, "Twitch authorization validated");
     copy_exact(visible_state.login, login);
     copy_exact(visible_state.channel, target);
     copy_exact(visible_state.broadcaster_id, broadcaster_id);
@@ -686,6 +828,8 @@ void login_begin() {
     device_deadline_ms = now_ms() + expiry * 1000LL;
     next_poll_ms = now_ms() + poll_seconds * 1000LL;
     portENTER_CRITICAL(&state_mux);
+    visible_state.login_generation = forearm::next_login_generation(visible_state.login_generation);
+    event.login_generation = visible_state.login_generation;
     visible_state.login_pending = true;
     visible_state.login_seconds_remaining = expiry;
     visible_state.login_poll_count = 0; visible_state.last_login_http_status = 0;
@@ -697,7 +841,10 @@ void login_begin() {
 void login_cancel(const char* reason) {
     device_code[0] = pending_user_code[0] = 0;
     device_deadline_ms = 0;
-    portENTER_CRITICAL(&state_mux); visible_state.login_pending = false; visible_state.login_seconds_remaining = 0; portEXIT_CRITICAL(&state_mux);
+    portENTER_CRITICAL(&state_mux);
+    visible_state.login_pending = false; visible_state.login_seconds_remaining = 0;
+    visible_state.login_generation = forearm::next_login_generation(visible_state.login_generation);
+    portEXIT_CRITICAL(&state_mux);
     state_message(reason);
 }
 void login_poll() {
@@ -717,7 +864,11 @@ void login_poll() {
             portENTER_CRITICAL(&state_mux); visible_state.last_login_poll_result = forearm::LoginPollResult::Success; portEXIT_CRITICAL(&state_mux);
             login_cancel("Twitch authorized; opening chat"); logged_out = false; next_network_attempt_ms = 0;
         }
-        else login_cancel("Login received but credentials could not be saved");
+        else {
+            if (token_response_failure == TokenResponseFailure::Storage)
+                tokens_drop_runtime(forearm::TokenLoadState::StorageUnavailable, "Reconnect required: new Twitch authorization could not be saved");
+            login_cancel("Login received but credentials could not be saved");
+        }
         return;
     }
     if (!response.ok || response.status >= 500 || response.status == 429) {
@@ -891,7 +1042,10 @@ void process_frame(RawFrame& frame) {
         const auto* subscription = cJSON_GetObjectItemCaseSensitive(payload, "subscription");
         const bool revoked = !std::strcmp(string_value(subscription, "status"), "authorization_revoked");
         stop_sockets();
-        if (revoked) { tokens_forget(); logged_out = true; state_message("Twitch authorization revoked; login again"); }
+        if (revoked) {
+            tokens_drop_runtime(forearm::TokenLoadState::InterruptedRefresh, "Reconnect required: Twitch authorization was revoked");
+            logged_out = true; state_message("Reconnect required: Twitch authorization was revoked");
+        }
         else { state_message("Twitch subscription revoked; reconnecting"); next_network_attempt_ms = now_ms() + 15000; }
         gap("Chat subscription ended — messages may be missing");
     } else if (!std::strcmp(kind, "notification") && !duplicate_event(string_value(metadata, "message_id"))) {
@@ -980,7 +1134,7 @@ void configure(const Configuration& value) {
     configuration = next;
     wifi_test_blocked.store(false); wifi_disconnect_until_ms = 0;
     logged_out = false; account_validated = false; login_requested = false;
-    if (changed_client) tokens_forget();
+    if (changed_client) tokens_drop_runtime(forearm::TokenLoadState::ClientMismatch);
     portENTER_CRITICAL(&state_mux);
     visible_state.configured = *configuration.ssid && *configuration.client_id;
     copy_exact(visible_state.channel, configuration.channel);
@@ -1016,13 +1170,15 @@ void watch_channel(const Configuration& target) {
 
 void worker(void*) {
     portENTER_CRITICAL(&state_mux); visible_state.worker_running = true; portEXIT_CRITICAL(&state_mux);
-    config_load(); tokens_load();
+    config_load();
     read_only_enforced.store(configuration.read_only != 0);
     portENTER_CRITICAL(&state_mux);
     visible_state.configured = *configuration.ssid && *configuration.client_id;
     visible_state.read_only = configuration.read_only != 0;
     copy_exact(visible_state.channel, configuration.channel);
+    visible_state.profile_loaded = true;
     portEXIT_CRITICAL(&state_mux);
+    tokens_load();
     if (*configuration.ssid) {
         if (wifi_setup()) state_message("Connecting to Wi-Fi"); else state_message("Wi-Fi initialization failed");
     } else state_message("Set up Wi-Fi and Twitch Client ID over USB");
@@ -1054,13 +1210,23 @@ void worker(void*) {
         }
         Command command;
         while (xQueueReceive(commands, &command, 0) == pdTRUE) {
-            if (command.kind == CommandKind::Configure) configure(command.config);
-            else if (command.kind == CommandKind::WatchChannel) watch_channel(command.config);
+            if (command.kind == CommandKind::Configure || command.kind == CommandKind::WatchChannel) {
+                if (access_test_staged.load()) {
+                    state_message("Cancel or restart the staged diagnostic before changing the profile");
+                } else if (command.kind == CommandKind::Configure) configure(command.config);
+                else watch_channel(command.config);
+            }
             else if (command.kind == CommandKind::Login) {
+                if (access_test_staged.load()) { state_message("Cancel or restart the staged diagnostic before login"); continue; }
                 stop_sockets(); login_cancel("Preparing Twitch login");
                 account_validated = false; last_validation_ms = 0;
                 login_requested = true; logged_out = false; next_network_attempt_ms = 0;
             } else if (command.kind == CommandKind::Moderate) execute_moderation(command);
+            else if (command.kind == CommandKind::StageAccessExpiryTest) {
+                stage_access_expiry_test(); access_test_command_pending.store(false);
+            } else if (command.kind == CommandKind::CancelAccessExpiryTest) {
+                cancel_access_expiry_test(); access_test_command_pending.store(false);
+            }
             else if (command.kind == CommandKind::RefreshTest) {
                 invalidate_moderation("Refreshing saved Twitch authorization");
                 account_validated = false; last_validation_ms = 0;
@@ -1070,7 +1236,7 @@ void worker(void*) {
                 refresh_test_pending.store(false);
             }
             else {
-                stop_sockets(); tokens_forget(); login_cancel("Signed out of Twitch");
+                stop_sockets(); tokens_logout(); login_cancel("Signed out of Twitch");
                 logged_out = true; login_requested = false;
             }
             command = Command{};
@@ -1116,16 +1282,22 @@ void worker(void*) {
         if (*device_code) { login_poll(); vTaskDelay(pdMS_TO_TICKS(30)); continue; }
         if (login_requested && now_ms() >= next_network_attempt_ms) { login_begin(); vTaskDelay(pdMS_TO_TICKS(30)); continue; }
         if (!*tokens.access) {
-            state_message(logged_out ? "Signed out; tap Connect to log in" : "Wi-Fi ready; tap Connect for Twitch login");
+            char reason[96];
+            portENTER_CRITICAL(&state_mux); copy_text(reason, visible_state.auth_reason); portEXIT_CRITICAL(&state_mux);
+            state_message(*reason ? reason : logged_out ? "Signed out; tap Connect to log in" : "Wi-Fi ready; tap Connect for Twitch login");
             vTaskDelay(pdMS_TO_TICKS(100)); continue;
         }
-        if ((!account_validated || now_ms() - last_validation_ms >= 3600000 ||
-             static_cast<std::int64_t>(std::time(nullptr)) + 90 >= tokens.expires_epoch) &&
+        if (!access_test_staged.load() && forearm::auth_validation_due(account_validated, last_validation_ms, now_ms(), tokens.expires_epoch, std::time(nullptr)) &&
             now_ms() >= next_network_attempt_ms) {
             const auto validation = validate_account();
             if (validation == Validation::NeedsLogin) {
-                stop_sockets(); tokens_forget(); logged_out = true;
-                state_message("Twitch login expired or revoked; connect again");
+                stop_sockets();
+                if (*tokens.access) tokens_drop_runtime(forearm::TokenLoadState::InterruptedRefresh,
+                    "Reconnect required: Twitch authorization is invalid for this app");
+                logged_out = true;
+                char reason[96];
+                portENTER_CRITICAL(&state_mux); copy_text(reason, visible_state.auth_reason); portEXIT_CRITICAL(&state_mux);
+                state_message(reason);
             } else if (validation == Validation::TemporaryFailure) {
                 invalidate_moderation("Twitch permission could not be revalidated");
                 next_network_attempt_ms = now_ms() + 15000;
@@ -1194,7 +1366,7 @@ bool twitch_start() {
     return false;
 }
 bool twitch_set_config(const char* ssid, const char* password, const char* client_id, const char* channel) {
-    if (!commands || !ssid || !password || !*ssid || std::strlen(ssid) > 32 || std::strlen(password) > 64 ||
+    if (access_test_staged.load() || !commands || !ssid || !password || !*ssid || std::strlen(ssid) > 32 || std::strlen(password) > 64 ||
         !client_name(client_id) || !login_name(channel, true)) return false;
     const auto password_length = std::strlen(password);
     if (password_length && password_length < 8) return false;
@@ -1213,7 +1385,7 @@ bool twitch_set_config(const char* ssid, const char* password, const char* clien
     return xQueueSend(commands, &command, 0) == pdTRUE;
 }
 bool twitch_watch_channel(const char* channel, bool read_only) {
-    if (!commands || !login_name(channel, false)) return false;
+    if (access_test_staged.load() || !commands || !login_name(channel, false)) return false;
     Command command; command.kind = CommandKind::WatchChannel;
     if (!copy_exact(command.config.channel, channel)) return false;
     for (auto& c : command.config.channel) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
@@ -1302,7 +1474,7 @@ void twitch_request_wifi_disconnect_for_test(std::uint32_t duration_ms) {
 }
 bool twitch_request_refresh_for_test() {
     const auto status = twitch_status();
-    if (!commands || !status.authenticated || !wifi_connected.load() || status.login_pending ||
+    if (access_test_staged.load() || !commands || !status.authenticated || !wifi_connected.load() || status.login_pending ||
         uxQueueMessagesWaiting(commands) ||
         (moderation_results && uxQueueMessagesWaiting(moderation_results))) return false;
     // The worker serializes all TLS operations. A currently active read-only
@@ -1314,4 +1486,22 @@ bool twitch_request_refresh_for_test() {
     if (xQueueSend(commands, &command, 0) == pdTRUE) return true;
     refresh_test_pending.store(false);
     return false;
+}
+bool twitch_expire_access_for_next_boot_for_test() {
+    const auto state = twitch_status();
+    if (!commands || access_test_staged.load() || !state.read_only || !state.authenticated || state.login_pending ||
+        uxQueueMessagesWaiting(commands) || (moderation_results && uxQueueMessagesWaiting(moderation_results))) return false;
+    bool expected = false;
+    if (!access_test_command_pending.compare_exchange_strong(expected, true)) return false;
+    Command command; command.kind = CommandKind::StageAccessExpiryTest;
+    if (xQueueSend(commands, &command, 0) == pdTRUE) return true;
+    access_test_command_pending.store(false); return false;
+}
+bool twitch_cancel_access_expiry_test() {
+    if (!commands || !access_test_staged.load()) return false;
+    bool expected = false;
+    if (!access_test_command_pending.compare_exchange_strong(expected, true)) return false;
+    Command command; command.kind = CommandKind::CancelAccessExpiryTest;
+    if (xQueueSend(commands, &command, 0) == pdTRUE) return true;
+    access_test_command_pending.store(false); return false;
 }

@@ -3,6 +3,7 @@
 #include "emote_cache.h"
 #include "forearm_fonts.h"
 #include "lvgl.h"
+#include <algorithm>
 #include <array>
 #include <cassert>
 #include <cstdio>
@@ -21,7 +22,17 @@ static const std::string asset_id = "7tv:" + std::string(124, 'a');
 std::int64_t esp_timer_get_time() { return fake_us; }
 bool emote_cache_init() { return true; }
 bool emote_cache_request(const char *) { return true; }
-const lv_img_dsc_t *emote_cache_get(const char *id) { return ready && asset_id == id ? &wide : nullptr; }
+const lv_img_dsc_t *test_cached_asset(const char *id) { return ready && asset_id == id ? &wide : nullptr; }
+bool emote_cache_dimensions(const char* id,unsigned& width,unsigned& height) {
+    const auto* image=test_cached_asset(id);
+    width=image?image->header.w:0; height=image?image->header.h:0;
+    return width&&height;
+}
+const lv_img_dsc_t* emote_cache_acquire(const char* id){return test_cached_asset(id);}
+bool emote_cache_matches(const char* id,const lv_img_dsc_t* image){return image&&test_cached_asset(id)==image;}
+void emote_cache_release(const lv_img_dsc_t*){}
+unsigned emote_cache_collect(const char*,const char*,forearm::MediaOccurrence*,unsigned count,unsigned){return count;}
+
 EmoteCacheStats emote_cache_stats() { EmoteCacheStats value{}; value.ready = ready ? 1 : 0; return value; }
 static void pump(unsigned ms = 64) {
     for (unsigned i = 0; i < ms; i += 8) { fake_us += 8000; lv_tick_inc(8); app_ui_tick(); lv_timer_handler(); }
@@ -134,11 +145,44 @@ int main() {
         const auto before=pixels; app_ui_set_sprite_cache(false);pump();lv_obj_invalidate(lv_scr_act());lv_refr_now(nullptr);
         assert(!std::memcmp(before.data(),pixels.data(),sizeof(pixels))); app_ui_set_sprite_cache(true);pump();
     }
+    // Circular-scroll identity headings must retain descenders and underscores
+    // at every size. Compare the modal against the same native label with an
+    // independently sufficient height, rather than accepting a clipped bitmap.
+    for(const auto level:levels) for(const auto *author_text:{"jgyq_", "Ёgjq_"}) {
+        app_ui_set_ui_scale(level); fixtures();
+        assert(app_ui_append("100","modal-size","300",author_text,"A synthetic message."));
+        app_ui_go_live();pump();tap(30,45);pump(500);assert(app_ui_stats().selection_visible);
+        auto *heading=find(lv_scr_act(),"SELECTED MESSAGE");assert(heading);
+        auto *panel=lv_obj_get_parent(heading);
+        auto *author=find(panel,author_text);assert(author);
+        auto *channel=find(panel,"#synthetic_room");assert(channel);
+        auto *excerpt=find(panel,"A synthetic message.");assert(excerpt);
+        const auto original_height=lv_obj_get_height(author);
+        const int font_height=lv_font_get_line_height(lv_obj_get_style_text_font(author,0));
+        lv_obj_add_flag(channel,LV_OBJ_FLAG_HIDDEN);
+        lv_obj_invalidate(lv_scr_act());lv_refr_now(nullptr);const auto before=pixels;
+        lv_obj_set_height(author,std::max(32,font_height));
+        lv_obj_invalidate(lv_scr_act());lv_refr_now(nullptr);
+        assert(!std::memcmp(before.data(),pixels.data(),sizeof(pixels)));
+        assert(original_height>=font_height);
+        const auto author_bounds=bounds(author);
+        if(level==150) {
+            unsigned lower_ink=0;
+            const auto background=lv_color_hex(0x08090C).full;
+            for(int y=author_bounds.y1+32;y<=author_bounds.y2;++y)
+                for(int x=author_bounds.x1;x<=author_bounds.x2;++x)lower_ink+=pixels[y*320+x].full!=background;
+            assert(lower_ink); // The pixel comparison actually covers cropped ink.
+        }
+        lv_obj_clear_flag(channel,LV_OBJ_FLAG_HIDDEN);
+        assert(author_bounds.y2<bounds(channel).y1&&bounds(channel).y2<bounds(excerpt).y1);
+        if(level==100)assert(original_height==32&&bounds(channel).y1==83);
+        app_ui_go_live();pump();
+    }
     app_ui_set_ui_scale(100); assert(commits==1);
     fixtures();
     const auto overlong_id=asset_id+"a";
     const AppUiEmote rejected{overlong_id.c_str(),"wide",0,4,true};
     assert(app_ui_append_emotes("100","bounded-id","300","viewer","wide",&rejected,1)); pump();
     assert(!app_ui_stats().emote_rows && !app_ui_stats().visible_emote_images);
-    std::puts("Native size control passed: clean startup, real nine-size fonts, anchored reflow, stale-selection reset,44px slider, live held-contact preview, one persistence callback, scaled wide emotes and cached/native pixel equality.");
+    std::puts("Native size control passed: clean startup, real nine-size fonts, anchored reflow, stale-selection reset,44px slider, live held-contact preview, one persistence callback, scaled wide emotes,18 unclipped modal-identity pixel comparisons and cached/native pixel equality.");
 }

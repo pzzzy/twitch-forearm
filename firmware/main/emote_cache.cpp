@@ -3,6 +3,7 @@
 #include "forearm/seventv_catalog.h"
 #include "forearm/catalog_store.h"
 #include "forearm/media_enrich.h"
+#include "forearm/media_cache_policy.h"
 
 #include <algorithm>
 #include <atomic>
@@ -36,13 +37,11 @@ constexpr unsigned kEntries = 64;
 constexpr std::size_t kSourceLimit = 32768;
 constexpr unsigned kDimensionLimit = 128;
 constexpr std::uint32_t kPixelBudget = 512 * 1024;
-enum class State : std::uint8_t { Empty, Waiting, Downloading, Ready, Failed };
+using State = forearm::MediaCacheState;
 struct Entry {
     char id[forearm::kMediaIdBytes]{};
     lv_img_dsc_t descriptor{};
-    std::atomic<State> state{State::Empty};
-    unsigned attempts = 0;
-    std::int64_t retry_at_ms = 0;
+    forearm::MediaCacheSlot slot{};
     unsigned char* seeded_png = nullptr;
     std::size_t seeded_bytes = 0;
 };
@@ -53,6 +52,7 @@ StaticQueue_t request_control;
 std::uint8_t request_storage[kEntries];
 portMUX_TYPE cache_mux = portMUX_INITIALIZER_UNLOCKED;
 EmoteCacheStats statistics{};
+std::uint64_t use_stamp = 0;
 std::int64_t cdn_backoff_until_ms = 0;
 std::int64_t provider_backoff_until_ms[3]{};
 unsigned provider(const char* id) { return !std::strncmp(id, "7tv:", 4) ? 1 : !std::strncmp(id, "emoji:", 6) ? 2 : 0; }
@@ -62,6 +62,7 @@ struct Catalog {
     unsigned count = 0, skipped = 0;
     char channel[33]{};
     bool global_ready = false, channel_ready = false, channel_set = false;
+    bool global_fetched = false, channel_fetched = false;
 };
 Catalog* catalogs[2]{};
 unsigned catalog_readers[2]{};
@@ -140,6 +141,32 @@ Download download(const char* id) {
     return result;
 }
 
+// Caller owns cache_mux. Ready entries with zero leases have already had their
+// LVGL decoder retired by the UI owner. Never free heap memory inside the lock.
+const std::uint8_t* retire_locked(Entry& entry) {
+    const auto* pixels = entry.descriptor.data;
+    if (entry.slot.state == State::Ready) {
+        statistics.decoded_bytes -= entry.descriptor.data_size;
+        --statistics.ready; ++statistics.evicted; ++statistics.generation;
+    }
+    entry.descriptor = {};
+    entry.slot = {};
+    entry.id[0] = 0;
+    return pixels;
+}
+bool reserve_pixels(std::uint32_t bytes) {
+    for (;;) {
+        portENTER_CRITICAL(&cache_mux);
+        const bool fits = statistics.decoded_bytes + bytes <= kPixelBudget;
+        const auto victim = fits ? -1 : forearm::media_cache_victim(kEntries,
+            [](unsigned i) -> const forearm::MediaCacheSlot& { return entries[i].slot; }, true);
+        const auto* pixels = victim >= 0 ? retire_locked(entries[victim]) : nullptr;
+        portEXIT_CRITICAL(&cache_mux);
+        heap_caps_free(const_cast<std::uint8_t*>(pixels));
+        if (fits) return true;
+        if (victim < 0) return false; // All remaining assets are leased.
+    }
+}
 bool decode(Entry& entry, const Download& source) {
     constexpr unsigned char signature[] = {137,80,78,71,13,10,26,10};
     if (!source.okay || source.length < 33 || std::memcmp(source.bytes, signature, sizeof(signature))) return false;
@@ -168,7 +195,7 @@ bool decode(Entry& entry, const Download& source) {
     unsigned output_width = 0, output_height = 0;
     forearm::media_dimensions(width, height, output_width, output_height);
     const std::uint32_t bytes = output_width * output_height * 3;
-    portENTER_CRITICAL(&cache_mux); const bool fits = statistics.decoded_bytes + bytes <= kPixelBudget; portEXIT_CRITICAL(&cache_mux);
+    const bool fits = reserve_pixels(bytes);
     auto* output = fits ? static_cast<std::uint8_t*>(heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)) : nullptr;
     if (!output) { lv_mem_free(rgba); return false; }
     for (unsigned y = 0; y < output_height; ++y) for (unsigned x = 0; x < output_width; ++x) {
@@ -194,11 +221,11 @@ bool decode(Entry& entry, const Download& source) {
     entry.descriptor.data_size = bytes;
     entry.descriptor.data = output;
     portENTER_CRITICAL(&cache_mux);
-    ++statistics.ready; statistics.bytes += source.length; statistics.decoded_bytes += bytes;
+    ++statistics.ready; ++statistics.generation;
+    statistics.bytes += source.length; statistics.decoded_bytes += bytes;
+    entry.slot.used = ++use_stamp;
+    entry.slot.state = State::Ready;
     portEXIT_CRITICAL(&cache_mux);
-    // Release publishes all descriptor fields and pixel bytes together. No
-    // ready entry is overwritten or evicted, so the UI may retain this pointer.
-    entry.state.store(State::Ready, std::memory_order_release);
     return true;
 }
 
@@ -261,24 +288,60 @@ void catalog_step(const TwitchStatus& network) {
         if (!catalog_readers[slot]) { building_catalog = slot; building_generation = generation; catalog_phase = 1; }
     }
     const auto slot = building_catalog; const auto phase = catalog_phase;
+    const auto previous_slot = active_catalog;
     portEXIT_CRITICAL(&cache_mux);
     if (slot < 0) return;
     auto& catalog = *catalogs[slot];
+    // Only this worker publishes catalog buffers. The other, active buffer is
+    // immutable throughout both HTTP phases, including while UI readers pin it.
+    const auto* previous = previous_slot >= 0 ? catalogs[previous_slot] : nullptr;
     if (phase == 1) {
         catalog.count = catalog.skipped = 0; std::strcpy(catalog.channel, channel);
-        catalog.global_ready = fetch_catalog(catalog, true);
-        if (!catalog.global_ready) catalog.count = 0; // Never publish a partial/malformed document.
+        catalog.global_fetched = catalog.global_ready = fetch_catalog(catalog, true);
+        if (!catalog.global_ready) {
+            catalog.count = 0; // Never publish a partial/malformed document.
+            // Globals are safe across room changes; channel aliases are not.
+            if (previous && forearm::catalog_retain_provider(catalog.global_fetched, previous->global_ready, true)) {
+                catalog.global_ready = forearm::catalog_append_provider(catalog.items, catalog.count,
+                    kCatalogEntries, previous->items, previous->count, true);
+            }
+        }
         catalog.channel_ready = catalog.channel_set = false;
+        catalog.channel_fetched = false;
         catalog_phase = 2;
         return; // Assets get a turn before the second bounded HTTP request.
     }
     const auto before_channel = catalog.count;
-    if (*catalog.channel) catalog.channel_ready = fetch_catalog(catalog, false, &catalog.channel_set);
-    else catalog.channel_ready = true;
+    if (*catalog.channel) catalog.channel_fetched = catalog.channel_ready = fetch_catalog(catalog, false, &catalog.channel_set);
+    else catalog.channel_fetched = catalog.channel_ready = true;
     if (!catalog.channel_ready) {
         // Channel aliases append after immutable globals. Roll back only that
         // response on malformed JSON/transport failure; globals stay usable.
         catalog.count = before_channel; catalog.channel_set = false;
+    }
+    bool retain_previous = false;
+    bool retained_channel = false;
+    if (previous && forearm::catalog_retain_provider(catalog.channel_fetched,
+            previous->channel_ready, !std::strcmp(previous->channel, catalog.channel))) {
+        if (forearm::catalog_append_provider(catalog.items, catalog.count,
+                kCatalogEntries, previous->items, previous->count, false)) {
+            catalog.channel_ready = true; catalog.channel_set = previous->channel_set;
+            retained_channel = true;
+        } else retain_previous = true;
+    }
+    if (retain_previous) {
+        // If a larger refreshed global set would displace validated channel
+        // aliases, keep the complete previous snapshot and retry the transaction.
+        portENTER_CRITICAL(&cache_mux);
+        ++statistics.catalog_retained;
+        if (generation == catalog_generation) {
+            statistics.catalog_ready = previous->global_ready || previous->channel_ready;
+            statistics.catalog_channel_matched = previous->channel_ready && previous->channel_set && *previous->channel;
+            catalog_due_ms = now_ms() + 60000;
+        } else catalog_due_ms = 0;
+        building_catalog = -1; catalog_phase = 0;
+        portEXIT_CRITICAL(&cache_mux);
+        return;
     }
     std::sort(catalog.items, catalog.items + catalog.count,
         [](const forearm::CatalogEmote& a, const forearm::CatalogEmote& b) { return std::strcmp(a.name, b.name) < 0; });
@@ -287,12 +350,14 @@ void catalog_step(const TwitchStatus& network) {
     portENTER_CRITICAL(&cache_mux);
     if (generation == catalog_generation) {
         active_catalog = slot;
+        ++statistics.catalog_generation;
+        if ((!catalog.global_fetched && catalog.global_ready) || retained_channel) ++statistics.catalog_retained;
         statistics.catalog_entries = catalog.count; statistics.catalog_global_entries = global_count;
         statistics.catalog_channel_entries = catalog.count - global_count;
         statistics.catalog_ready = catalog.global_ready || catalog.channel_ready;
         statistics.catalog_channel_matched = catalog.channel_ready && catalog.channel_set && *catalog.channel;
         statistics.catalog_truncated += catalog.skipped;
-        catalog_due_ms = now_ms() + ((catalog.global_ready && catalog.channel_ready) ? 15 * 60 * 1000LL : 60000);
+        catalog_due_ms = now_ms() + ((catalog.global_fetched && catalog.channel_fetched) ? 15 * 60 * 1000LL : 60000);
     } else catalog_due_ms = 0;
     building_catalog = -1; catalog_phase = 0;
     portEXIT_CRITICAL(&cache_mux);
@@ -300,16 +365,45 @@ void catalog_step(const TwitchStatus& network) {
 
 void worker(void*) {
     portENTER_CRITICAL(&cache_mux); statistics.worker_running = true; portEXIT_CRITICAL(&cache_mux);
+    std::int64_t next_catalog_turn_ms = 0;
     for (;;) {
         const auto stack_free = uxTaskGetStackHighWaterMark(nullptr);
         portENTER_CRITICAL(&cache_mux); statistics.worker_stack_free = stack_free; portEXIT_CRITICAL(&cache_mux);
+        // A busy asset queue must not starve the first catalog or its refresh.
+        // One bounded HTTP phase per turn leaves asset work between phases.
+        if (now_ms() >= next_catalog_turn_ms) {
+            catalog_step(twitch_status());
+            next_catalog_turn_ms = now_ms() + 2000;
+        }
         std::uint8_t slot = 0;
         if (xQueueReceive(requests, &slot, pdMS_TO_TICKS(200)) != pdTRUE || slot >= kEntries) {
-            catalog_step(twitch_status());
+            // Retry recent demand even if chat is quiet. UI keeps viewport
+            // demand alive; old offscreen messages cannot monopolize retries.
+            int retry = -1;
+            const auto now = now_ms();
+            portENTER_CRITICAL(&cache_mux);
+            for (unsigned i = 0; i < kEntries; ++i) {
+                if (!forearm::media_cache_retry_due(entries[i].slot, now)) continue;
+                entries[i].slot.state = State::Waiting; retry = i; break;
+            }
+            portEXIT_CRITICAL(&cache_mux);
+            if (retry >= 0) {
+                const auto item = static_cast<std::uint8_t>(retry);
+                if (xQueueSend(requests, &item, 0) != pdTRUE) {
+                    portENTER_CRITICAL(&cache_mux);
+                    entries[retry].slot.state = State::Failed;
+                    entries[retry].slot.retry_at_ms = now + 1000;
+                    ++statistics.rejected;
+                    portEXIT_CRITICAL(&cache_mux);
+                }
+            }
             continue;
         }
         auto& entry = entries[slot];
-        if (entry.state.load(std::memory_order_acquire) != State::Waiting) continue;
+        portENTER_CRITICAL(&cache_mux);
+        const bool waiting = entry.slot.state == State::Waiting;
+        portEXIT_CRITICAL(&cache_mux);
+        if (!waiting) continue;
         // Keep the ID queued during radio setup. This does not spend retries or
         // start a TLS handshake before Wi-Fi and certificate time are ready.
         portENTER_CRITICAL(&cache_mux); const bool has_seed = entry.seeded_png != nullptr; portEXIT_CRITICAL(&cache_mux);
@@ -323,10 +417,10 @@ void worker(void*) {
             vTaskDelay(pdMS_TO_TICKS(100));
             continue;
         }
-        entry.state.store(State::Downloading, std::memory_order_release);
-        ++entry.attempts;
         Download source;
         portENTER_CRITICAL(&cache_mux);
+        entry.slot.state = State::Downloading;
+        if (entry.slot.attempts < 3) ++entry.slot.attempts;
         source.bytes = entry.seeded_png; source.length = entry.seeded_bytes;
         entry.seeded_png = nullptr; entry.seeded_bytes = 0;
         portEXIT_CRITICAL(&cache_mux);
@@ -336,9 +430,11 @@ void worker(void*) {
         heap_caps_free(source.bytes);
         if (!okay) {
             if (source.retry_after_seconds) provider_backoff_until_ms[provider(entry.id)] = now_ms() + source.retry_after_seconds * 1000LL;
-            entry.retry_at_ms = now_ms() + (entry.attempts == 1 ? 30000 : 120000);
-            entry.state.store(State::Failed, std::memory_order_release);
-            portENTER_CRITICAL(&cache_mux); ++statistics.failed; portEXIT_CRITICAL(&cache_mux);
+            portENTER_CRITICAL(&cache_mux);
+            entry.slot.retry_at_ms = now_ms() + forearm::media_cache_retry_delay(entry.slot.attempts);
+            entry.slot.state = State::Failed;
+            ++statistics.failed;
+            portEXIT_CRITICAL(&cache_mux);
         }
         // Never start a stream of downloads faster than one per second.
         cdn_backoff_until_ms = std::max(cdn_backoff_until_ms, now_ms() + 1000);
@@ -370,51 +466,113 @@ bool emote_cache_request(const char* id) {
         portENTER_CRITICAL(&cache_mux); ++statistics.rejected; portEXIT_CRITICAL(&cache_mux);
         return false;
     }
+    const auto now = now_ms();
     int chosen = -1;
-    int vacant = -1;
-    int reclaim = -1;
-    bool matched = false;
-    bool already = false;
+    bool matched = false, already = false;
+    const std::uint8_t* retired = nullptr;
     portENTER_CRITICAL(&cache_mux);
     for (unsigned i = 0; i < kEntries; ++i) {
-        const auto state = entries[i].state.load(std::memory_order_acquire);
-        if (state != State::Empty && !std::strcmp(entries[i].id, id)) {
-            matched = true;
-            if (state == State::Ready || state == State::Waiting || state == State::Downloading) already = true;
-            else if (entries[i].attempts < 3 && now_ms() >= entries[i].retry_at_ms) chosen = i;
-            break;
-        }
-        if (state == State::Empty && vacant < 0) vacant = i;
-        if (state == State::Failed && now_ms() >= entries[i].retry_at_ms && !entries[i].seeded_png && reclaim < 0) reclaim = i;
+        auto& entry = entries[i];
+        if (entry.slot.state == State::Empty || std::strcmp(entry.id, id)) continue;
+        matched = true;
+        entry.slot.wanted_until_ms = now + 60000;
+        entry.slot.used = ++use_stamp;
+        already = entry.slot.state != State::Failed;
+        if (forearm::media_cache_retry_due(entry.slot, now)) chosen = i;
+        break;
     }
-    if (!matched) chosen = vacant >= 0 ? vacant : reclaim;
+    if (!matched) chosen = forearm::media_cache_victim(kEntries,
+        [](unsigned i) -> const forearm::MediaCacheSlot& { return entries[i].slot; });
     if (!already && chosen >= 0) {
         auto& entry = entries[chosen];
         if (!matched) {
+            retired = retire_locked(entry);
             std::memcpy(entry.id, id, std::strlen(id) + 1);
-            entry.attempts = 0; entry.retry_at_ms = 0;
+            entry.slot.used = ++use_stamp;
+            entry.slot.wanted_until_ms = now + 60000;
             ++statistics.requested;
         }
-        entry.state.store(State::Waiting, std::memory_order_release);
+        entry.slot.state = State::Waiting;
     }
     if (!already && chosen < 0 && !matched) ++statistics.rejected;
     portEXIT_CRITICAL(&cache_mux);
+    heap_caps_free(const_cast<std::uint8_t*>(retired));
     if (already) return true;
     if (chosen < 0) return false;
     const auto slot = static_cast<std::uint8_t>(chosen);
     if (xQueueSend(requests, &slot, 0) == pdTRUE) return true;
-    entries[chosen].state.store(State::Failed, std::memory_order_release);
-    portENTER_CRITICAL(&cache_mux); ++statistics.rejected; portEXIT_CRITICAL(&cache_mux);
+    portENTER_CRITICAL(&cache_mux);
+    entries[chosen].slot.state = State::Failed;
+    entries[chosen].slot.retry_at_ms = now + 1000;
+    ++statistics.rejected;
+    portEXIT_CRITICAL(&cache_mux);
     return false;
 }
-const lv_img_dsc_t* emote_cache_get(const char* id) {
-    if (!initialized.load(std::memory_order_acquire) || !valid_id(id)) return nullptr;
+bool emote_cache_dimensions(const char* id, unsigned& width, unsigned& height) {
+    width = height = 0;
+    if (!initialized.load(std::memory_order_acquire) || !valid_id(id)) return false;
+    bool found = false;
+    portENTER_CRITICAL(&cache_mux);
     for (unsigned i = 0; i < kEntries; ++i) {
         const auto& entry = entries[i];
-        if (entry.state.load(std::memory_order_acquire) == State::Ready && !std::strcmp(entry.id, id))
-            return &entry.descriptor;
+        if (entry.slot.state != State::Ready || std::strcmp(entry.id, id)) continue;
+        width = entry.descriptor.header.w; height = entry.descriptor.header.h;
+        found = true; break;
     }
-    return nullptr;
+    portEXIT_CRITICAL(&cache_mux);
+    return found;
+}
+const lv_img_dsc_t* emote_cache_acquire(const char* id) {
+    if (!initialized.load(std::memory_order_acquire) || !valid_id(id)) return nullptr;
+    const lv_img_dsc_t* image = nullptr;
+    portENTER_CRITICAL(&cache_mux);
+    for (unsigned i = 0; i < kEntries; ++i) {
+        auto& entry = entries[i];
+        if (entry.slot.state != State::Ready || std::strcmp(entry.id, id)) continue;
+        if (forearm::media_cache_pin(entry.slot, ++use_stamp)) {
+            image = &entry.descriptor; ++statistics.pinned;
+        }
+        break;
+    }
+    portEXIT_CRITICAL(&cache_mux);
+    return image;
+}
+bool emote_cache_matches(const char* id, const lv_img_dsc_t* leased) {
+    if (!initialized.load(std::memory_order_acquire) || !id || !leased) return false;
+    bool matches = false;
+    portENTER_CRITICAL(&cache_mux);
+    for (unsigned i = 0; i < kEntries; ++i) {
+        const auto& entry = entries[i];
+        if (&entry.descriptor == leased) {
+            matches = entry.slot.state == State::Ready && entry.slot.pins && !std::strcmp(entry.id, id);
+            break;
+        }
+    }
+    portEXIT_CRITICAL(&cache_mux);
+    return matches;
+}
+void emote_cache_release(const lv_img_dsc_t* image) {
+    if (!image || !initialized.load(std::memory_order_acquire)) return;
+    int chosen = -1;
+    bool last = false;
+    portENTER_CRITICAL(&cache_mux);
+    for (unsigned i = 0; i < kEntries; ++i) {
+        if (&entries[i].descriptor != image) continue;
+        if (entries[i].slot.state == State::Ready && entries[i].slot.pins) {
+            chosen = i; last = entries[i].slot.pins == 1;
+        }
+        break;
+    }
+    if (chosen < 0) ++statistics.lease_errors;
+    portEXIT_CRITICAL(&cache_mux);
+    if (chosen < 0) return;
+    // Still pinned while LVGL closes its decoder. UI owner is the sole lease
+    // mutator; the worker cannot recycle this descriptor during invalidation.
+    if (last) lv_img_cache_invalidate_src(image);
+    portENTER_CRITICAL(&cache_mux);
+    if (forearm::media_cache_unpin(entries[chosen].slot)) --statistics.pinned;
+    else ++statistics.lease_errors;
+    portEXIT_CRITICAL(&cache_mux);
 }
 EmoteCacheStats emote_cache_stats() {
     portENTER_CRITICAL(&cache_mux); const auto snapshot = statistics; portEXIT_CRITICAL(&cache_mux);
@@ -428,6 +586,7 @@ void emote_cache_set_channel(const char* channel) {
     if (value != desired_channel) {
         std::memcpy(desired_channel, value.data(), value.size()); desired_channel[value.size()] = 0;
         ++catalog_generation; catalog_due_ms = 0;
+        ++statistics.catalog_generation;
         statistics.catalog_channel_matched = false;
     }
     portEXIT_CRITICAL(&cache_mux);
@@ -461,29 +620,34 @@ bool emote_cache_seed_png(const char* id, const std::uint8_t* png, std::size_t b
     auto* copy = static_cast<unsigned char*>(heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
     if (!copy) return false;
     std::memcpy(copy, png, bytes);
-    int matching = -1, vacant = -1;
+    int matching = -1;
     bool enqueue = false;
+    const std::uint8_t* retired = nullptr;
     portENTER_CRITICAL(&cache_mux);
     for (unsigned i = 0; i < kEntries; ++i) {
-        const auto state = entries[i].state.load(std::memory_order_acquire);
+        const auto state = entries[i].slot.state;
         if (state != State::Empty && !std::strcmp(entries[i].id, id)) { matching = i; break; }
-        if (state == State::Empty && vacant < 0) vacant = i;
     }
-    const int chosen = matching >= 0 ? matching : vacant;
+    const int chosen = matching >= 0 ? matching : forearm::media_cache_victim(kEntries,
+        [](unsigned i) -> const forearm::MediaCacheSlot& { return entries[i].slot; });
     if (chosen >= 0) {
         auto& entry = entries[chosen];
-        const auto state = entry.state.load(std::memory_order_acquire);
+        if (matching < 0) retired = retire_locked(entry);
+        const auto state = entry.slot.state;
         if (state != State::Ready && state != State::Downloading && !entry.seeded_png) {
             if (state == State::Empty) {
                 std::memcpy(entry.id, id, std::strlen(id) + 1); ++statistics.requested;
             }
             entry.seeded_png = copy; entry.seeded_bytes = bytes;
             enqueue = state != State::Waiting;
-            entry.state.store(State::Waiting, std::memory_order_release);
+            entry.slot.state = State::Waiting;
+            entry.slot.used = ++use_stamp;
+            entry.slot.wanted_until_ms = now_ms() + 60000;
             copy = nullptr;
         }
     }
     portEXIT_CRITICAL(&cache_mux);
+    heap_caps_free(const_cast<std::uint8_t*>(retired));
     if (copy) { heap_caps_free(copy); return false; }
     if (!enqueue) return true;
     const auto slot = static_cast<std::uint8_t>(chosen);
@@ -491,7 +655,8 @@ bool emote_cache_seed_png(const char* id, const std::uint8_t* png, std::size_t b
     portENTER_CRITICAL(&cache_mux);
     auto* unused = entries[chosen].seeded_png;
     entries[chosen].seeded_png = nullptr; entries[chosen].seeded_bytes = 0;
-    entries[chosen].state.store(State::Failed, std::memory_order_release);
+    entries[chosen].slot.state = State::Failed;
+    entries[chosen].slot.retry_at_ms = now_ms() + 1000;
     ++statistics.rejected;
     portEXIT_CRITICAL(&cache_mux);
     heap_caps_free(unused);
