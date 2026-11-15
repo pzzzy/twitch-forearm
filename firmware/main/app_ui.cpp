@@ -1022,11 +1022,13 @@ void render_emotes(Row &row, const Layout *item) {
         if (!row.images[i]) {
             row.images[i] = lv_img_create(row.button);
             lv_obj_clear_flag(row.images[i], LV_OBJ_FLAG_CLICKABLE);
-            lv_img_set_pivot(row.images[i], 0, 0);
         }
         if (lv_img_get_src(row.images[i]) != source) {
             lv_img_set_src(row.images[i], source);
         }
+        // LVGL resets the pivot to the source centre on every assignment.
+        // Inline positions describe the scaled top-left, including on rebind.
+        lv_img_set_pivot(row.images[i], 0, 0);
         const auto desired_zoom = emote_zoom(source);
         if (lv_img_get_zoom(row.images[i]) != desired_zoom) lv_img_set_zoom(row.images[i], desired_zoom);
         const auto zoom = lv_img_get_zoom(row.images[i]);
