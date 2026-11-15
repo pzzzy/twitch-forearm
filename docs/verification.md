@@ -56,6 +56,24 @@ Only a matching release's notes and qualification summary report their final
 outcomes. Results from 0.4.0-beta.1 or the older snapshots below do not qualify
 this source.
 
+### Rejected scaled-media preflight — November 15
+
+Source `bc157eaa` was rejected before its final active soak after
+an actual device framebuffer showed a scaled emoji clipped at the row boundary.
+All four downloaded assets had reached Ready; successful download/cache counts
+did not establish correct rendered pixels. LVGL resets an image's transform
+pivot to its source centre on every source assignment. The UI had set its
+top-left pivot before that assignment, shifting scaled images away from their
+reserved inline positions.
+
+The correction sets the origin after source assignment, including when an
+existing image object is rebound. New real-LVGL tests compare actual row-clipped
+pixels with a complete, unclipped native-image reference for 48/72 px squares
+and a wide image at all nine sizes. The old ordering fails that pixel comparison.
+The rejected image's raw evidence is retained privately. New exact-image hardware,
+performance and soak results must be recorded separately; the host regression
+does not qualify the corrected binary.
+
 ## Historical source `54c1169c` — November 10: useful evidence, rejected soak
 
 The immutable baseline is source

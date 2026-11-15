@@ -34,6 +34,7 @@ for source, extra in [("moderation_ui_test.cpp", []),
                       ("text_scale_test.cpp", []),
                       ("profile_ui_test.cpp", []),
                       ("media_leases_test.cpp", []),
+                      ("emote_origin_test.cpp", []),
                       ("backdrop_pixels_test.cpp", ["-DFOREARM_UI_TEST_HEAP"])]:
     executable = output / Path(source).stem
     subprocess.run(["c++", "-std=c++17", "-Wall", "-Wextra", "-Werror"] + flags + extra +
