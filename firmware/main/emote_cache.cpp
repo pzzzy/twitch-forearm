@@ -385,8 +385,10 @@ bool fetch_catalog(Catalog& catalog, bool global, bool* has_channel_set = nullpt
 }
 
 void catalog_step(const TwitchStatus& network) {
-    if (!network.wifi_connected || !network.time_synchronized || !network.chat_connected || network.login_pending ||
-        twitch_network_busy() || now_ms() < catalog_retry_after_ms) return;
+    // The validated room is enough for public catalog fetches. Requiring an
+    // active chat socket would defeat initial catalog prewarming in Twitch.
+    if (!network.wifi_connected || !network.time_synchronized || !network.authenticated ||
+        !*network.broadcaster_id || network.login_pending || twitch_network_busy() || now_ms() < catalog_retry_after_ms) return;
     unsigned generation = 0; char channel[33];
     portENTER_CRITICAL(&cache_mux);
     generation = catalog_generation; std::strcpy(channel, desired_channel);
