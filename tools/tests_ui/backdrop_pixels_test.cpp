@@ -434,3 +434,5 @@ int main() {
     app_ui_set_ui_scale(100); pump(64);
     std::printf("Native LVGL author cache: %u native-label poisoned-frame comparisons pixel-identical; ASCII25/Unicode100B/clips/pressed/mask/layers/OOM/LRU; no cache allocation/free during DRAW.\n", author_comparisons);
 }
+
+const lv_img_dsc_t* emote_cache_frame(const lv_img_dsc_t* image, std::uint32_t) { return image; }

@@ -186,3 +186,5 @@ int main() {
     assert(!app_ui_stats().emote_rows && !app_ui_stats().visible_emote_images);
     std::puts("Native size control passed: clean startup, real nine-size fonts, anchored reflow, stale-selection reset,44px slider, live held-contact preview, one persistence callback, scaled wide emotes,18 unclipped modal-identity pixel comparisons and cached/native pixel equality.");
 }
+
+const lv_img_dsc_t* emote_cache_frame(const lv_img_dsc_t* image, std::uint32_t) { return image; }

@@ -4,6 +4,7 @@
 #include "forearm/catalog_store.h"
 #include "forearm/media_enrich.h"
 #include "forearm/media_cache_policy.h"
+#include "forearm/gif_frames.h"
 
 #include <algorithm>
 #include <atomic>
@@ -34,11 +35,18 @@ static_assert(LV_COLOR_DEPTH == 16, "Emote cache stores RGB565 plus alpha");
 
 namespace {
 constexpr unsigned kEntries = 64;
-constexpr std::size_t kSourceLimit = 32768;
+constexpr std::size_t kSourceLimit = 131072;
 constexpr unsigned kDimensionLimit = 128;
 constexpr std::uint32_t kPixelBudget = 512 * 1024;
 using State = forearm::MediaCacheState;
+struct Animation {
+    lv_img_dsc_t frames[32]{};
+    uint32_t ends[32]{};
+    unsigned count = 0;
+    uint32_t duration = 0;
+};
 struct Entry {
+    Animation* animation = nullptr;
     char id[forearm::kMediaIdBytes]{};
     lv_img_dsc_t descriptor{};
     forearm::MediaCacheSlot slot{};
@@ -90,13 +98,13 @@ esp_err_t header_event(esp_http_client_event_t* event) {
     }
     return ESP_OK;
 }
-Download download(const char* id) {
+Download download(const char* id, bool animate = true) {
     Download result;
     const auto deadline = now_ms() + 12000;
     // Only an ASCII identifier is interpolated; origin/path/format/theme/size
-    // are fixed. No credential, arbitrary URL, redirects or animated asset.
+    // are fixed. No credentials, arbitrary URLs or redirects are allowed.
     char url[256];
-    if (!forearm::media_url(id, url, sizeof(url))) return result;
+    if (!forearm::media_url(id, url, sizeof(url), animate)) return result;
     esp_http_client_config_t config{};
     config.url = url;
     config.timeout_ms = 6000;
@@ -106,7 +114,7 @@ Download download(const char* id) {
     config.buffer_size_tx = 512;
     config.event_handler = header_event;
     config.user_data = &result;
-    config.user_agent = "ForearmChat/0.5";
+    config.user_agent = "ForearmChat/0.6";
     auto client = esp_http_client_init(&config);
     if (!client) return result;
     if (esp_http_client_open(client, 0) == ESP_OK) {
@@ -149,6 +157,7 @@ const std::uint8_t* retire_locked(Entry& entry) {
         statistics.decoded_bytes -= entry.descriptor.data_size;
         --statistics.ready; ++statistics.evicted; ++statistics.generation;
     }
+    entry.animation = nullptr;
     entry.descriptor = {};
     entry.slot = {};
     entry.id[0] = 0;
@@ -167,9 +176,9 @@ bool reserve_pixels(std::uint32_t bytes) {
         if (victim < 0) return false; // All remaining assets are leased.
     }
 }
-bool decode(Entry& entry, const Download& source) {
+bool decode_png(Entry& entry, const Download& source) {
     constexpr unsigned char signature[] = {137,80,78,71,13,10,26,10};
-    if (!source.okay || source.length < 33 || std::memcmp(source.bytes, signature, sizeof(signature))) return false;
+    if (!source.okay || source.length > 32768 || source.length < 33 || std::memcmp(source.bytes, signature, sizeof(signature))) return false;
     LodePNGState state;
     lodepng_state_init(&state);
     state.info_raw.colortype = LCT_RGBA;
@@ -229,6 +238,104 @@ bool decode(Entry& entry, const Download& source) {
     return true;
 }
 
+bool decode_animation(Entry &entry, const Download &source) {
+    auto *workspace = static_cast<forearm::GifWorkspace *>(
+        heap_caps_malloc(sizeof(forearm::GifWorkspace), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    if (!workspace)
+        return false;
+    // Validate the entire bounded stream before allocating published frame pixels.
+    unsigned frames = 0, width = 0, height = 0;
+    uint32_t duration = 0;
+    bool valid = forearm::gif_frames(source.bytes, source.length, *workspace,
+                                     [&](const uint8_t *, unsigned w, unsigned h, unsigned delay, unsigned) {
+                                         width = w;
+                                         height = h;
+                                         ++frames;
+                                         duration += delay;
+                                         vTaskDelay(1);
+                                         return duration <= 30000;
+                                     });
+    if (!valid || !frames) {
+        heap_caps_free(workspace);
+        return false;
+    }
+    // Group source frames uniformly, retaining each group's complete time span.
+    const unsigned stored = std::min(frames, 32u);
+    unsigned ow = width, oh = height;
+    while (oh > 32 || ow > 128 || ow * oh * stored * 3 > 96 * 1024) {
+        ow = std::max(1u, ow - 1);
+        oh = std::max(1u, (height * ow + width / 2) / width);
+    }
+    const unsigned stride = ow * oh * 3, bytes = stride * stored;
+    auto *pixels = reserve_pixels(bytes)
+                       ? static_cast<uint8_t *>(heap_caps_malloc(((bytes + 7u) & ~7u) + sizeof(Animation),
+                                                                 MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT))
+                       : nullptr;
+    auto *anim = pixels ? reinterpret_cast<Animation *>(pixels + ((bytes + 7u) & ~7u)) : nullptr;
+    if (!pixels || !anim) {
+        heap_caps_free(pixels);
+        heap_caps_free(workspace);
+        return false;
+    }
+    new (anim) Animation();
+    unsigned previous = 32;
+    uint32_t clock = 0;
+    valid = forearm::gif_frames(source.bytes, source.length, *workspace,
+                                [&](const uint8_t *rgba, unsigned w, unsigned h, unsigned delay, unsigned index) {
+                                    unsigned slot = index * stored / frames;
+                                    if (slot != previous) {
+                                        auto *output = pixels + slot * stride;
+                                        for (unsigned y = 0; y < oh; ++y)
+                                            for (unsigned x = 0; x < ow; ++x) {
+                                                const auto *p = rgba + ((y * h / oh) * w + x * w / ow) * 4;
+                                                uint16_t c = ((p[0] >> 3) << 11) | ((p[1] >> 2) << 5) | (p[2] >> 3);
+#if LV_COLOR_16_SWAP
+                                                c = (c >> 8) | (c << 8);
+#endif
+                                                unsigned at = (y * ow + x) * 3;
+                                                output[at] = c & 255;
+                                                output[at + 1] = c >> 8;
+                                                output[at + 2] = p[3];
+                                            }
+                                        auto &d = anim->frames[slot];
+                                        d.header.cf = LV_IMG_CF_TRUE_COLOR_ALPHA;
+                                        d.header.w = ow;
+                                        d.header.h = oh;
+                                        d.data_size = stride;
+                                        d.data = output;
+                                        previous = slot;
+                                    }
+                                    clock += delay;
+                                    anim->ends[slot] = clock;
+                                    vTaskDelay(1);
+                                    return true;
+                                });
+    heap_caps_free(workspace);
+    if (!valid) {
+        heap_caps_free(pixels);
+        return false;
+    }
+    anim->count = stored;
+    anim->duration = duration;
+    entry.animation = anim;
+    entry.descriptor = anim->frames[0];
+    entry.descriptor.data_size = bytes;
+    portENTER_CRITICAL(&cache_mux);
+    ++statistics.ready;
+    ++statistics.generation;
+    statistics.bytes += source.length;
+    statistics.decoded_bytes += bytes;
+    entry.slot.used = ++use_stamp;
+    entry.slot.state = State::Ready;
+    portEXIT_CRITICAL(&cache_mux);
+    return true;
+}
+bool decode(Entry &entry, const Download &source) {
+    if (source.okay && source.length >= 6 && !std::memcmp(source.bytes, "GIF", 3))
+        return decode_animation(entry, source);
+    return decode_png(entry, source);
+}
+
 void add_catalog_emote(void* context, const forearm::CatalogEmote& emote) {
     auto& catalog = *static_cast<Catalog*>(context);
     if (!forearm::catalog_add(catalog.items, catalog.count, kCatalogEntries, emote)) ++catalog.skipped;
@@ -243,7 +350,7 @@ bool fetch_catalog(Catalog& catalog, bool global, bool* has_channel_set = nullpt
     esp_http_client_config_t config{};
     config.url = url; config.timeout_ms = 4000; config.crt_bundle_attach = esp_crt_bundle_attach;
     config.disable_auto_redirect = true; config.buffer_size = 1024; config.buffer_size_tx = 512;
-    config.event_handler = header_event; config.user_data = &headers; config.user_agent = "ForearmChat/0.5";
+    config.event_handler = header_event; config.user_data = &headers; config.user_agent = "ForearmChat/0.6";
     auto client = esp_http_client_init(&config);
     if (!client) return false;
     bool okay = false;
@@ -426,8 +533,18 @@ void worker(void*) {
         portEXIT_CRITICAL(&cache_mux);
         if (source.bytes) source.okay = true;
         else source = download(entry.id);
-        const bool okay = decode(entry, source);
+        bool okay = decode(entry, source);
         heap_caps_free(source.bytes);
+        const bool supports_poster = provider(entry.id) == 0 ||
+            (provider(entry.id) == 1 && std::strstr(entry.id, ":a"));
+        if (!okay && !has_seed && supports_poster && !source.retry_after_seconds) {
+            // Bound animation failures to a static fallback, respecting CDN pacing.
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            auto poster = download(entry.id, false);
+            okay = decode_png(entry, poster);
+            source.retry_after_seconds = poster.retry_after_seconds;
+            heap_caps_free(poster.bytes);
+        }
         if (!okay) {
             if (source.retry_after_seconds) provider_backoff_until_ms[provider(entry.id)] = now_ms() + source.retry_after_seconds * 1000LL;
             portENTER_CRITICAL(&cache_mux);
@@ -568,14 +685,27 @@ void emote_cache_release(const lv_img_dsc_t* image) {
     if (chosen < 0) return;
     // Still pinned while LVGL closes its decoder. UI owner is the sole lease
     // mutator; the worker cannot recycle this descriptor during invalidation.
-    if (last) lv_img_cache_invalidate_src(image);
+    if (last) {
+        lv_img_cache_invalidate_src(image);
+        if (const auto* animation = entries[chosen].animation)
+            for (unsigned f = 0; f < animation->count; ++f)
+                lv_img_cache_invalidate_src(&animation->frames[f]);
+    }
     portENTER_CRITICAL(&cache_mux);
     if (forearm::media_cache_unpin(entries[chosen].slot)) --statistics.pinned;
     else ++statistics.lease_errors;
     portEXIT_CRITICAL(&cache_mux);
 }
 EmoteCacheStats emote_cache_stats() {
-    portENTER_CRITICAL(&cache_mux); const auto snapshot = statistics; portEXIT_CRITICAL(&cache_mux);
+    portENTER_CRITICAL(&cache_mux);
+    auto snapshot = statistics;
+    for (unsigned i = 0; entries && i < kEntries; ++i) {
+        if (entries[i].slot.state == State::Ready && entries[i].animation) {
+            ++snapshot.animated_ready;
+            snapshot.animation_frames += entries[i].animation->count;
+        }
+    }
+    portEXIT_CRITICAL(&cache_mux);
     return snapshot;
 }
 void emote_cache_set_channel(const char* channel) {
@@ -661,4 +791,21 @@ bool emote_cache_seed_png(const char* id, const std::uint8_t* png, std::size_t b
     portEXIT_CRITICAL(&cache_mux);
     heap_caps_free(unused);
     return false;
+}
+
+const lv_img_dsc_t *emote_cache_frame(const lv_img_dsc_t *lease, uint32_t clock_ms) {
+    if (!lease || !initialized.load(std::memory_order_acquire))
+        return lease;
+    for (unsigned i = 0; i < kEntries; ++i)
+        if (&entries[i].descriptor == lease) {
+            const auto *a = entries[i].animation;
+            if (!a || !a->duration)
+                return lease;
+            const auto time = clock_ms % a->duration;
+            for (unsigned f = 0; f < a->count; ++f)
+                if (time < a->ends[f])
+                    return &a->frames[f];
+            return &a->frames[0];
+        }
+    return lease;
 }

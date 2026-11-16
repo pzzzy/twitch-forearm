@@ -41,14 +41,14 @@ inline bool emoji_key(std::string_view value) {
     return digits != 0;
 }
 // Fixed origins, version and paths. The caller can never supply a URL or query.
-inline bool media_url(std::string_view id, char* output, std::size_t bytes) {
+inline bool media_url(std::string_view id, char* output, std::size_t bytes, bool animate = true) {
     int count = -1;
     if (id.substr(0, 4) == "7tv:") {
         auto object = id.substr(4); const bool animated = object.size() > 2 && object.substr(object.size() - 2) == ":a";
         if (animated) object.remove_suffix(2);
         if (!seventv_id(object)) return false;
-        count = std::snprintf(output, bytes, "https://cdn.7tv.app/emote/%.*s/1x%s.png",
-                              static_cast<int>(object.size()), object.data(), animated ? "_static" : "");
+        count = std::snprintf(output, bytes, "https://cdn.7tv.app/emote/%.*s/1x%s.%s",
+                              static_cast<int>(object.size()), object.data(), animated && !animate ? "_static" : "", animated && animate ? "gif" : "png");
     } else if (id.substr(0, 6) == "emoji:") {
         const auto key = id.substr(6);
         if (!emoji_key(key)) return false;
@@ -56,8 +56,8 @@ inline bool media_url(std::string_view id, char* output, std::size_t bytes) {
                               static_cast<int>(key.size()), key.data());
     } else {
         if (!ascii_identifier(id, 64)) return false;
-        count = std::snprintf(output, bytes, "https://static-cdn.jtvnw.net/emoticons/v2/%.*s/static/dark/1.0",
-                              static_cast<int>(id.size()), id.data());
+        count = std::snprintf(output, bytes, "https://static-cdn.jtvnw.net/emoticons/v2/%.*s/%s/dark/1.0",
+                              static_cast<int>(id.size()), id.data(), animate ? "default" : "static");
     }
     return count > 0 && static_cast<std::size_t>(count) < bytes;
 }

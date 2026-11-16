@@ -74,11 +74,12 @@ int main() {
     CHECK(!catalog_retain_provider(false, false, true));
     CHECK(!catalog_retain_provider(true, true, true)); // Valid empty is authoritative.
     char url[256];
-    CHECK(media_url("25", url, sizeof(url)) && std::string_view(url).find("static-cdn.jtvnw.net/emoticons/v2/25/static/dark/1.0") != std::string_view::npos);
-    CHECK(media_url("7tv:0123456789abcdef01234567:a", url, sizeof(url)) && std::string_view(url).find("1x_static.png") != std::string_view::npos);
+    CHECK(media_url("25", url, sizeof(url)) && std::string_view(url).find("static-cdn.jtvnw.net/emoticons/v2/25/default/dark/1.0") != std::string_view::npos);
+    CHECK(media_url("7tv:0123456789abcdef01234567:a", url, sizeof(url)) && std::string_view(url).find("1x.gif") != std::string_view::npos);
     CHECK(media_url("7tv:01FCY771D800007PQ2DF3GDTN6", url, sizeof(url)) && std::string_view(url).find("/1x.png") != std::string_view::npos);
     CHECK(media_url("emoji:1f600", url, sizeof(url)) && std::string_view(url).find("@388f518b756404152f128a3539f5e7f9a6f1ebd6/") != std::string_view::npos);
     for (const auto* bad : {"https://bad.invalid/a", "7tv:../secret", "7tv:0123456789abcdef01234567?x=1", "emoji:../../file", "emoji:1f600?x", "emoji:1f600--200d", "emoji:ABC", "7tv:01FCY771D800007PQ2DF3GDTN6:evil"}) CHECK(!media_url(bad, url, sizeof(url)));
+    CHECK(media_url("7tv:0123456789abcdef01234567:a",url,sizeof(url),false) && std::string_view(url).find("1x_static.png")!=std::string_view::npos);
     CHECK(!media_url("emoji:1f600", url, 16));
     unsigned w = 0, h = 0; media_dimensions(72, 72, w, h); CHECK(w == 48 && h == 48);
     media_dimensions(128, 128, w, h); CHECK(w == 48 && h == 48);

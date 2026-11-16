@@ -399,7 +399,7 @@ void status(cJSON* response) {
     metric(cache,"failed",em.failed);metric(cache,"rejected",em.rejected);
     metric(cache,"downloads",em.downloads);metric(cache,"bytes",em.bytes);metric(cache,"decoded_bytes",em.decoded_bytes);
     metric(cache,"generation",em.generation);metric(cache,"evicted",em.evicted);metric(cache,"pinned",em.pinned);
-    metric(cache,"lease_errors",em.lease_errors);metric(cache,"catalog_generation",em.catalog_generation);
+    metric(cache,"lease_errors",em.lease_errors);metric(cache,"animated_ready",em.animated_ready);metric(cache,"animation_frames",em.animation_frames);metric(cache,"catalog_generation",em.catalog_generation);
     metric(cache,"catalog_retained",em.catalog_retained);
     metric(cache,"catalog_entries",em.catalog_entries);metric(cache,"catalog_global_entries",em.catalog_global_entries);
     metric(cache,"catalog_channel_entries",em.catalog_channel_entries);metric(cache,"catalog_fetches",em.catalog_fetches);
@@ -509,6 +509,7 @@ void command(char* input) {
             }
             ok=app_ui_append_emotes("demo",id,"fixture-viewer",*name?name:"layout_test",text,emotes,count,
                                     esp_timer_get_time()/1000,str(request,"user_login"));
+            if(ok)app_ui_set_message_badges("demo",id,str(request,"badges"));
         }
     }
     else if (!strcmp(cmd,"emote_seed")) {
@@ -625,6 +626,7 @@ void network_events() {
                         e.emotes[j].byte_offset,e.emotes[j].byte_length,e.emotes[j].position_valid};
                     app_ui_append_emotes(e.channel_id,e.message_id,e.user_id,e.display_name,e.text,emotes,count,
                                         esp_timer_get_time()/1000,e.user_login);
+                    app_ui_set_message_badges(e.channel_id,e.message_id,e.badge_text);
                     if(e.moderation_metadata_valid)
                         app_ui_set_message_moderation_metadata(e.channel_id,e.message_id,e.source_channel_id,e.source_message_id,e.moderator);
                     break;

@@ -104,3 +104,5 @@ int main() {
     }
     std::puts("Inline origin pixels passed:27 row-clipped vs complete native image comparisons across all9 sizes,48/72px squares and96px wide sources; same-object source rebinding preserves origin and complete ink.");
 }
+
+const lv_img_dsc_t* emote_cache_frame(const lv_img_dsc_t* image, std::uint32_t) { return image; }

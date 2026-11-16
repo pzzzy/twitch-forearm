@@ -10,7 +10,7 @@ identities must match the package manifest. An outcome document added later must
 not silently change the source identity of an already tested binary.
 
 The implementation includes guarded moderation, saved read-only profiles,
-positioned inline static emotes and complete sender-name/login fallback. Host
+positioned inline emotes and complete sender-name/login fallback. Host
 tests cover those contracts with fake action callbacks; they do not send live
 moderation. A Twitch acknowledgement, diagnostic injection and physical finger
 interaction are separate kinds of evidence.
@@ -23,6 +23,16 @@ their actual source/image rather than inferred from these pins.
 
 Battery, charging, temperature against skin and forearm mounting are
 **unqualified** in the agreed hardware-beta scope.
+
+## 0.6.0-dev animation/badge development — November 16, 2026
+
+The development image displayed a real configured-channel 7TV GIF fetched over HTTPS. Four successive framebuffer captures contained different emote frames, with MOD/VIP/subscription captions visible. This is a framebuffer check, not a camera or physical-finger measurement. A synthetic 70-animation cache-turnover run exercised eight evictions with zero lease, display or touch errors. A three-frame 600 ms fixture advanced about five completed panel frames per second while idle, matching its source cadence.
+
+Injected dense-chat scrolling measured 29.56 completed panel frames/s programmatically, 30.15 during a held contact, and 27.91 across ten gestures including release idle/USB overhead. That workload used plain synthetic messages and the saved 67% size; it does not establish the same rate for many simultaneous animations. No Twitch posts or moderation actions were sent, and the configured channel profile remained read-only.
+
+The bounded decoder was compared with an independent decoder on an original three-frame fixture, a 51-frame public 7TV GIF and a partial-frame/transparency/disposal fixture. Truncation/mutation checks ran under ASan/UBSan. Actual-LVGL host tests cover pending slots, idle animation frame changes, caption wrapping and existing scroll/lease contracts. The 512-record layout table now includes a fixed 96-byte badge caption per record (48 KiB additional PSRAM).
+
+These are development checks, not release qualification. Published 0.5.0-beta.1 binaries and their qualification identity remain unchanged. A new downloadable release requires its own exact-image checks.
 
 ## 0.5.0-beta.1 candidate — November 15, 2026
 

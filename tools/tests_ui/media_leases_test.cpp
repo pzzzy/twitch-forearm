@@ -82,10 +82,10 @@ int main(){
     const auto unchanged=acquisitions;app_ui_scroll(1);pump();assert(acquisitions==unchanged); // Retain an exact existing lease.
     assert(publish("26"));assert(!publish("27")||lookup("25"));assert(lookup("25")&&lookup("25")->refs); // Pinned asset cannot retire.
     fresh();assert(!emote_cache_stats().pinned&&acquisitions==releases);
-    assert(app_ui_append("100","literal","300","viewer","Kappa"));app_ui_go_live();pump();
+    append("pending","999999");
     const auto literal_pixels=framebuffer;fresh();
     assert(publish("25"));race_acquire=true;append("race","25");
-    assert(!app_ui_stats().visible_emote_images&&!emote_cache_stats().pinned); // Ready snapshot lost acquisition; literal text remains.
+    assert(!app_ui_stats().visible_emote_images&&!emote_cache_stats().pinned); // Acquisition race retains the same non-text pending slot.
     assert(!std::memcmp(literal_pixels.data(),framebuffer.data(),sizeof(framebuffer)));
     assert(publish("25"));pump(128);assert(app_ui_stats().visible_emote_images==1); // Generation restores image without a new message.
     for(unsigned i=0;i<70;++i){fresh();const auto id=std::to_string(1000+i);assert(publish(id.c_str()));append(id.c_str(),id.c_str());
@@ -114,5 +114,7 @@ int main(){
     const auto appended=app_ui_stats().appended;const auto last=std::string("2039");assert(publish(last.c_str()));pump(128);
     assert(app_ui_stats().appended==appended&&app_ui_stats().visible_emote_images>=1);
     fresh();assert(!emote_cache_stats().pinned&&acquisitions==releases);
-    std::puts("Media leases passed: exact retained leases, detach-before-release, race-safe literal fallback, generation-only recovery,70-asset retirement, visible-only retries and paced catalog history enrichment preserving native spans/anchors; no cache operations during DRAW.");
+    std::puts("Media leases passed: exact retained leases, detach-before-release, race-safe pending slots, generation-only recovery,70-asset retirement, visible-only retries and paced catalog history enrichment preserving native spans/anchors; no cache operations during DRAW.");
 }
+
+const lv_img_dsc_t* emote_cache_frame(const lv_img_dsc_t* image, std::uint32_t) { return image; }

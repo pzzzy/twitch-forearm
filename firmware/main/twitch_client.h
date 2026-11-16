@@ -22,6 +22,7 @@ struct TwitchEvent {
     char source_channel_id[33]{};
     char source_message_id[65]{};
     char display_name[101]{};
+    char badge_text[96]{};
     char user_login[26]{};
     char text[2049]{};
     char verification_url[512]{};

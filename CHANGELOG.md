@@ -1,6 +1,13 @@
 # Changelog
 
-## Unreleased
+## Unreleased — 0.6.0-dev
+
+- Animated Twitch and configured-channel/global 7TV GIFs, with bounded decoding, frame storage and static poster fallback.
+- Immediate reserved inline slots for recognized emotes, avoiding trigger text flashing before graphics load.
+- Username badge captions for broadcaster, mod, VIP, subscriber/months and other supplied channel badge sets; wrapping follows text size.
+- Host coverage for GIF parsing, badge captions and animation advancement without new messages. New development-image hardware results are separate from the published beta qualification.
+
+## Initial 0.4.0-beta.1 candidate scope (historical)
 
 The first public release candidate is **0.4.0-beta.1**, a hardware beta. Publication remains subject to the exact-image checks in [release gates](docs/releasing.md).
 

@@ -21,6 +21,9 @@ static std::array<lv_color_t, 320 * 480> framebuffer{};
 static lv_img_dsc_t asset{};
 static std::array<std::uint8_t, 25 * 28 * 3> asset_pixels{};
 static unsigned fixture_id = 0;
+static bool alternate_frame=false;
+static lv_img_dsc_t alternate{};
+static std::array<std::uint8_t,25*28*3> alternate_pixels{};
 
 std::int64_t esp_timer_get_time() { return fake_us; }
 bool emote_cache_init() { return true; }
@@ -108,14 +111,14 @@ int main() {
     app_ui_set_authenticated("Synthetic owner", "synthetic_room");
     assert(app_ui_stats().read_only);
 
-    // Missing assets keep literal text. Arrival replaces that occurrence and
+    // Pending assets reserve a blank slot without flashing the trigger text. Arrival
     // invalidates an already built sprite even when the row height is unchanged.
     auto id = fresh("viewer_name_", "Kappa");
     const AppUiEmote first{"25", "Kappa", 0, 5, true}; emotes(id, &first, 1);
     auto *row = author_row("viewer_name_"); auto body = bounds(lv_obj_get_child(row, 1));
     auto literal = capture();
     assert(!app_ui_stats().visible_emote_images);
-    assert(ink(literal, {55, body.y1, 100, body.y2}) > 0);
+    assert(ink(literal, {55, body.y1, 100, body.y2}) == 0);
     const auto builds = app_ui_stats().sprite_cache_builds;
     asset_ready = true; pump(128);
     auto loaded = capture();
@@ -204,7 +207,7 @@ int main() {
     asset_ready = true; pump(128);
     const auto after_arrival = app_ui_stats();
     assert(after_arrival.paused && after_arrival.anchor_sequence == before_arrival.anchor_sequence &&
-           after_arrival.anchor_offset == before_arrival.anchor_offset && after_arrival.scroll_y < before_arrival.scroll_y);
+           after_arrival.anchor_offset == before_arrival.anchor_offset && after_arrival.scroll_y <= before_arrival.scroll_y);
 
     // Full names wrap in a stable 224px column outside the cog's 72px target.
     const std::string maximum_name(25, 'W');
@@ -237,5 +240,15 @@ int main() {
     auto *pause = lv_obj_get_parent(find_label(lv_scr_act(), LV_SYMBOL_PAUSE)); assert(pause);
     assert(lv_obj_get_width(pause) == 52 && lv_obj_get_height(pause) == 52 &&
            lv_obj_get_style_bg_opa(pause, LV_PART_MAIN) == LV_OPA_30);
-    std::puts("Inline/layout pixels passed: literal fallback, arrival sprite invalidation, no duplicate/global replacement, exact UTF-8 spans, repeated and bounded8 emotes, reserved-marker collision, paused reflow anchors, full25-character names, ASCII20/Unicode24, exact login fallback pixels and52px translucent pause.");
+    id=fresh("badge_viewer_","Kappa");emotes(id,&first,1);
+    app_ui_set_message_badges("100",id.c_str(),"[MOD] [VIP] [SUB 12m] ");pump(64);
+    assert(find_label(lv_scr_act(),"[MOD] [VIP] [SUB 12m] badge_viewer_"));
+    alternate=asset;alternate.data=alternate_pixels.data();
+    for(unsigned i=0;i<25*28;++i){alternate_pixels[i*3]=0;alternate_pixels[i*3+1]=0xf8;alternate_pixels[i*3+2]=255;}
+    const auto animation_before=capture();const auto state_before=app_ui_stats();alternate_frame=true;pump(128);const auto animation_after=capture();
+    assert(std::memcmp(animation_before.data(),animation_after.data(),sizeof(animation_after)));
+    assert(app_ui_stats().appended==state_before.appended && app_ui_stats().history_height==state_before.history_height);
+    std::puts("Inline/layout pixels passed: pending slots, animated frames, badge captions, literal fallback, arrival sprite invalidation, no duplicate/global replacement, exact UTF-8 spans, repeated and bounded8 emotes, reserved-marker collision, paused reflow anchors, full25-character names, ASCII20/Unicode24, exact login fallback pixels and52px translucent pause.");
 }
+
+const lv_img_dsc_t* emote_cache_frame(const lv_img_dsc_t* image, std::uint32_t) { return alternate_frame ? &alternate : image; }

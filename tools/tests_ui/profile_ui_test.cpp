@@ -91,3 +91,5 @@ int main(){
     assert(!std::strcmp(app_ui_channel(),"#next_room")&&app_ui_stats().authenticated);
     std::puts("Saved-profile UI passed: pre-auth hydration, no invented room, offline/relogin room and exact source fallback, session-loss denial despite stale grants, same-room retention, real-room invalidation, and held-contact-safe settings refresh.");
 }
+
+const lv_img_dsc_t* emote_cache_frame(const lv_img_dsc_t* image, std::uint32_t) { return image; }

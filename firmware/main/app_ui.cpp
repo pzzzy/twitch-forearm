@@ -65,6 +65,7 @@ struct ModerationMetadata {
 
 struct Layout {
     std::uint64_t sequence = 0;
+    char badges[96]{};
     std::int32_t height = 0;
     EmoteRow *emotes = nullptr;
     ModerationMetadata *moderation = nullptr;
@@ -224,9 +225,9 @@ forearm::ModerationCapabilities moderation_caps{};
 forearm::ModerationRequest moderation_target{};
 forearm::ModerationRequest pending_moderation{};
 forearm::ModerationResult moderation_result{};
-char selected_author[101]{};
+char selected_author[224]{};
 char selected_channel[96]{};
-char pending_author[101]{};
+char pending_author[224]{};
 char pending_channel[96]{};
 bool selected_metadata_verified = false;
 bool pending_metadata_verified = false;
@@ -379,9 +380,18 @@ bool emote_glyph(const lv_font_t *, lv_font_glyph_dsc_t *out, std::uint32_t lett
 }
 const std::uint8_t *emote_bitmap(const lv_font_t *, std::uint32_t) { return nullptr; }
 
-const char *display_author(const forearm::Message &message) {
+const char *plain_author(const forearm::Message &message) {
     return !message.user_login.view().empty() && !forearm_font_supports_text(message.display_name.c_str()) ?
            message.user_login.c_str() : message.display_name.c_str();
+}
+void author_caption(const forearm::Message& message, char* out, std::size_t bytes) {
+    const char* badges = "";
+    for (std::size_t i = 0; i < layout_count; ++i) {
+        if (layout[i].sequence != message.sequence) continue;
+        badges = layout[i].badges;
+        break;
+    }
+    std::snprintf(out, bytes, "%s%s", badges, plain_author(message));
 }
 const lv_font_t *author_font(const char *name) {
     for (const auto *c = reinterpret_cast<const unsigned char *>(name); *c; ++c)
@@ -452,7 +462,7 @@ void body_text(const forearm::Message &message, const EmoteRow *emotes, char *ou
     while (source < length && written + 5 < kBodyBytes) {
         unsigned replacement = 8;
         if (emotes) for (unsigned i = 0; i < emotes->count; ++i)
-            if ((emotes->ready_mask & (1U << i)) && source == emotes->offsets[i]) { replacement = i; break; }
+            if (source == emotes->offsets[i]) { replacement = i; break; }
         if (replacement < 8) {
             const auto marker = kEmoteMarker + replacement;
             out[written++] = static_cast<char>(0xF0 | (marker >> 18));
@@ -495,7 +505,8 @@ std::int32_t measure_message(const forearm::Message &message, const EmoteRow *em
     InlineMetrics metrics{emotes ? emotes->advances : nullptr};
     char text[kBodyBytes];
     body_text(message, emotes, text);
-    const auto *name = display_author(message);
+    char name[224];
+    author_caption(message, name, sizeof(name));
     const auto author = text_height(name, author_font(name), kAuthorWidth);
     if (author_height) *author_height = static_cast<std::uint16_t>(author);
     return std::max<int>(minimum_row_height, header_gap + author + text_height(text, &inline_font, width - 2 * kSide) + body_bottom);
@@ -1023,6 +1034,7 @@ void render_emotes(Row &row, const Layout *item) {
             row.images[i] = lv_img_create(row.button);
             lv_obj_clear_flag(row.images[i], LV_OBJ_FLAG_CLICKABLE);
         }
+        source = emote_cache_frame(source, static_cast<uint32_t>(now_ms()));
         if (lv_img_get_src(row.images[i]) != source) {
             lv_img_set_src(row.images[i], source);
         }
@@ -1264,7 +1276,8 @@ void render_rows() {
             row.font_generation = font_generation;
             row.revision = item.revision;
             row.author_attempted = false;
-            const auto *name = display_author(*message);
+            char name[224];
+            author_caption(*message, name, sizeof(name));
             lv_obj_set_style_text_font(row.author, author_font(name), 0);
             lv_label_set_text(row.author, name);
             row.emote_advances.fill(0);
@@ -1521,7 +1534,7 @@ void show_selection(std::uint64_t sequence) {
     std::snprintf(moderation_target.message_id, sizeof(moderation_target.message_id), "%s", selected->message_id.c_str());
     std::snprintf(moderation_target.user_id, sizeof(moderation_target.user_id), "%s", selected->user_id.c_str());
     moderation_target.received_at_ms = selected->received_at_ms;
-    std::snprintf(selected_author, sizeof(selected_author), "%s", display_author(*selected));
+    author_caption(*selected, selected_author, sizeof(selected_author));
     if (*channel) std::snprintf(selected_channel, sizeof(selected_channel), "%s", channel);
     else std::snprintf(selected_channel, sizeof(selected_channel), "Channel %s", selected->channel_id.c_str());
     selected_metadata_verified = false;
@@ -2116,7 +2129,23 @@ void app_ui_tick() {
     }
     // At most one bounded message enrichment per UI tick, never all512 records.
     refresh_one_catalog_message();
-    if (!layout_dirty && !follow_dirty) { request_visible_media(); return; }
+    if (!layout_dirty && !follow_dirty) {
+        // Animate immutable leased frames without rebuilding any text/layout.
+        static uint64_t animation_tick = 0;
+        if (now_ms() >= animation_tick) {
+            animation_tick = now_ms() + 50;
+            for (auto& row : rows) for (unsigned i = 0; i < row.images.size(); ++i) {
+                if (!row.images[i] || !row.image_sources[i]) continue;
+                const auto* frame = emote_cache_frame(row.image_sources[i], static_cast<uint32_t>(now_ms()));
+                if (lv_img_get_src(row.images[i]) != frame) {
+                    lv_img_set_src(row.images[i], frame);
+                    lv_img_set_pivot(row.images[i], 0, 0);
+                }
+            }
+        }
+        request_visible_media();
+        return;
+    }
     const auto layout_start = esp_timer_get_time();
     update_guard = true;
     lv_obj_set_height(content, std::max<int>(chat_height, total_height));
@@ -2696,4 +2725,29 @@ void app_ui_set_backdrop_culling(bool enabled) {
     if (backdrop_culling_enabled == enabled) return;
     backdrop_culling_enabled = enabled;
     if (screen) lv_obj_invalidate(screen);
+}
+
+void app_ui_set_message_badges(const char* channel_id, const char* message_id, const char* badges) {
+    if (!store || !channel_id || !message_id || !badges) return;
+    for (std::size_t i = 0; i < layout_count; ++i) {
+        const auto* message = store->at(i);
+        if (message->channel_id.view() != channel_id || message->message_id.view() != message_id || message->deleted) continue;
+        if (!std::strcmp(layout[i].badges, badges)) return;
+        std::int32_t old_top = 0;
+        const auto old_first = first_visible(&old_top);
+        const auto old_offset = scroll_y - old_top;
+        std::snprintf(layout[i].badges, sizeof(layout[i].badges), "%s", badges);
+        const auto old_height = layout[i].height;
+        layout[i].height = measure_message(*message, layout[i].emotes, &layout[i].author_height);
+        const auto delta = layout[i].height - old_height;
+        total_height += delta;
+        if (store->paused()) {
+            if (i < old_first) scroll_y += delta;
+            else if (i == old_first) scroll_y = old_top + std::min<std::int32_t>(old_offset, layout[i].height - 1);
+        }
+        ++layout[i].revision;
+        invalidate_sprite(layout[i].sequence);
+        layout_dirty = true;
+        return;
+    }
 }
