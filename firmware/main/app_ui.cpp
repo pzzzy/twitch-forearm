@@ -407,6 +407,120 @@ void compact_author(const char *full, const lv_font_t *font, int available, char
             --length;
     }
 }
+template <class Stroke> void badge_ink(forearm::BadgeIcon icon, Stroke stroke) {
+    using Icon = forearm::BadgeIcon;
+    if (icon == Icon::Mod) {
+        stroke(4, 12, 12, 3);
+        stroke(4, 8, 8, 12);
+        stroke(3, 13, 5, 11);
+    } else if (icon == Icon::Vip || icon == Icon::Bits) {
+        stroke(8, 3, 12, 8);
+        stroke(12, 8, 8, 13);
+        stroke(8, 13, 3, 8);
+        stroke(3, 8, 8, 3);
+        if (icon == Icon::Bits)
+            stroke(8, 5, 8, 11);
+    } else if (icon == Icon::Host) {
+        stroke(3, 5, 9, 5);
+        stroke(9, 5, 9, 11);
+        stroke(9, 11, 3, 11);
+        stroke(3, 11, 3, 5);
+        stroke(9, 7, 13, 5);
+        stroke(13, 5, 13, 11);
+        stroke(13, 11, 9, 9);
+    } else if (icon == Icon::Prime) {
+        stroke(3, 5, 5, 11);
+        stroke(5, 11, 11, 11);
+        stroke(11, 11, 13, 5);
+        stroke(3, 5, 6, 8);
+        stroke(6, 8, 8, 4);
+        stroke(8, 4, 10, 8);
+        stroke(10, 8, 13, 5);
+    } else if (icon == Icon::Sub || icon == Icon::Founder) {
+        const int points[][2] = {{8, 2},  {10, 6}, {14, 7}, {11, 10}, {12, 14}, {8, 12},
+                                 {4, 14}, {5, 10}, {2, 7},  {6, 6},   {8, 2}};
+        for (unsigned j = 0; j < 10; ++j)
+            stroke(points[j][0], points[j][1], points[j + 1][0], points[j + 1][1]);
+        if (icon == Icon::Founder)
+            stroke(6, 14, 10, 14);
+    } else if (icon == Icon::Turbo) {
+        stroke(10, 3, 5, 9);
+        stroke(5, 9, 10, 8);
+        stroke(10, 8, 6, 13);
+    } else if (icon == Icon::Artist) {
+        stroke(5, 11, 11, 4);
+        stroke(4, 10, 7, 12);
+        stroke(3, 13, 5, 12);
+    } else if (icon == Icon::More) {
+        stroke(4, 8, 12, 8);
+        stroke(8, 4, 8, 12);
+    } else {
+        stroke(8, 3, 11, 6);
+        stroke(11, 6, 8, 9);
+        stroke(8, 9, 5, 6);
+        stroke(5, 6, 8, 3);
+        stroke(6, 8, 5, 13);
+        stroke(5, 13, 8, 11);
+        stroke(8, 11, 11, 13);
+        stroke(11, 13, 10, 8);
+    }
+}
+struct BadgeAtlas {
+    lv_color_t *pixels = nullptr;
+    std::array<lv_img_dsc_t, 11> icons{};
+};
+std::array<BadgeAtlas, 7> badge_atlases{}; // Edges 12..18; at most 50 KiB PSRAM.
+lv_obj_t *badge_canvas = nullptr;
+lv_color_t badge_canvas_dummy{};
+bool author_style_safe(const Row &row);
+void prepare_badge_atlas() {
+    const int edge = header_icon_size();
+    auto &atlas = badge_atlases[edge - 12];
+    if (atlas.pixels || !author_cache_enabled)
+        return;
+    const unsigned frame_pixels = edge * edge;
+    auto *pixels = static_cast<lv_color_t *>(
+        heap_caps_malloc(frame_pixels * 11 * sizeof(lv_color_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    if (!pixels)
+        return;
+    if (!badge_canvas) {
+        badge_canvas = lv_canvas_create(screen);
+        if (!badge_canvas) {
+            heap_caps_free(pixels);
+            return;
+        }
+        lv_obj_add_flag(badge_canvas, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(badge_canvas, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    }
+    lv_draw_line_dsc_t line;
+    lv_draw_line_dsc_init(&line);
+    line.color = color(0xFFFFFF);
+    line.width = edge >= 16 ? 2 : 1;
+    line.round_start = line.round_end = true;
+    for (unsigned i = 0; i < atlas.icons.size(); ++i) {
+        auto *buffer = pixels + i * frame_pixels;
+        lv_color_fill(buffer, color(kInk), frame_pixels);
+        lv_canvas_set_buffer(badge_canvas, buffer, edge, edge, LV_IMG_CF_TRUE_COLOR);
+        lv_draw_rect_dsc_t tile;
+        lv_draw_rect_dsc_init(&tile);
+        tile.bg_color = color(forearm::badge_color(static_cast<forearm::BadgeIcon>(i)));
+        tile.radius = 2;
+        lv_canvas_draw_rect(badge_canvas, 0, 0, edge, edge, &tile);
+        badge_ink(static_cast<forearm::BadgeIcon>(i), [&](int x1, int y1, int x2, int y2) {
+            lv_point_t points[] = {{static_cast<lv_coord_t>(x1 * edge / 16), static_cast<lv_coord_t>(y1 * edge / 16)},
+                                   {static_cast<lv_coord_t>(x2 * edge / 16), static_cast<lv_coord_t>(y2 * edge / 16)}};
+            lv_canvas_draw_line(badge_canvas, points, 2, &line);
+        });
+        auto &image = atlas.icons[i];
+        image.header.cf = LV_IMG_CF_TRUE_COLOR;
+        image.header.w = edge;
+        image.header.h = edge;
+        image.data_size = frame_pixels * sizeof(lv_color_t);
+        image.data = reinterpret_cast<const uint8_t *>(buffer);
+    }
+    lv_canvas_set_buffer(badge_canvas, &badge_canvas_dummy, 1, 1, LV_IMG_CF_TRUE_COLOR);
+    atlas.pixels = pixels; // Publish only complete immutable sprites outside DRAW.
+}
 void badge_draw_event(lv_event_t *event) {
     const auto &row = *static_cast<Row *>(lv_event_get_user_data(event));
     if (!row.badge_icons.count)
@@ -414,8 +528,10 @@ void badge_draw_event(lv_event_t *event) {
     auto *context = lv_event_get_draw_ctx(event);
     lv_area_t bounds;
     lv_obj_get_coords(row.badges, &bounds);
-    const int edge = header_icon_size();
-    const int y = bounds.y1 + (lv_area_get_height(&bounds) - edge) / 2;
+    const int edge = header_icon_size(), y = bounds.y1 + (lv_area_get_height(&bounds) - edge) / 2;
+    const auto &atlas = badge_atlases[edge - 12];
+    // Opaque sprites are valid only on the same proven ink background as names.
+    const bool cached = author_cache_enabled && atlas.pixels && author_style_safe(row);
     lv_draw_line_dsc_t line;
     lv_draw_line_dsc_init(&line);
     line.color = color(0xFFFFFF);
@@ -424,69 +540,24 @@ void badge_draw_event(lv_event_t *event) {
     for (unsigned i = 0; i < row.badge_icons.count; ++i) {
         const auto icon = row.badge_icons.icons[i];
         const int x = bounds.x1 + i * (edge + 3);
+        lv_area_t area{static_cast<lv_coord_t>(x), static_cast<lv_coord_t>(y), static_cast<lv_coord_t>(x + edge - 1),
+                       static_cast<lv_coord_t>(y + edge - 1)};
+        if (cached) {
+            lv_draw_img_dsc_t image;
+            lv_draw_img_dsc_init(&image);
+            lv_draw_img(context, &image, &area, &atlas.icons[static_cast<unsigned>(icon)]);
+            continue;
+        }
         lv_draw_rect_dsc_t tile;
         lv_draw_rect_dsc_init(&tile);
         tile.bg_color = color(forearm::badge_color(icon));
         tile.radius = 2;
-        lv_area_t area{static_cast<lv_coord_t>(x), static_cast<lv_coord_t>(y), static_cast<lv_coord_t>(x + edge - 1),
-                       static_cast<lv_coord_t>(y + edge - 1)};
         lv_draw_rect(context, &tile, &area);
-        auto stroke = [&](int x1, int y1, int x2, int y2) {
-            lv_point_t a{static_cast<lv_coord_t>(x + x1 * edge / 16), static_cast<lv_coord_t>(y + y1 * edge / 16)};
-            lv_point_t b{static_cast<lv_coord_t>(x + x2 * edge / 16), static_cast<lv_coord_t>(y + y2 * edge / 16)};
-            lv_draw_line(context, &line, &a, &b);
-        };
-        using Icon = forearm::BadgeIcon;
-        if (icon == Icon::Mod) {
-            stroke(4, 12, 12, 3);
-            stroke(4, 8, 8, 12);
-            stroke(3, 13, 5, 11);
-        } else if (icon == Icon::Vip || icon == Icon::Bits) {
-            stroke(8, 3, 12, 8);
-            stroke(12, 8, 8, 13);
-            stroke(8, 13, 3, 8);
-            stroke(3, 8, 8, 3);
-            if (icon == Icon::Bits)
-                stroke(8, 5, 8, 11);
-        } else if (icon == Icon::Host) {
-            stroke(3, 5, 9, 5);
-            stroke(9, 5, 9, 11);
-            stroke(9, 11, 3, 11);
-            stroke(3, 11, 3, 5);
-            stroke(9, 7, 13, 5);
-            stroke(13, 5, 13, 11);
-            stroke(13, 11, 9, 9);
-        } else if (icon == Icon::Prime) {
-            stroke(3, 5, 5, 11);
-            stroke(5, 11, 11, 11);
-            stroke(11, 11, 13, 5);
-            stroke(3, 5, 6, 8);
-            stroke(6, 8, 8, 4);
-            stroke(8, 4, 10, 8);
-            stroke(10, 8, 13, 5);
-        } else if (icon == Icon::Sub || icon == Icon::Founder) {
-            const int points[][2] = {{8, 2},  {10, 6}, {14, 7}, {11, 10}, {12, 14}, {8, 12},
-                                     {4, 14}, {5, 10}, {2, 7},  {6, 6},   {8, 2}};
-            for (unsigned j = 0; j < 10; ++j)
-                stroke(points[j][0], points[j][1], points[j + 1][0], points[j + 1][1]);
-            if (icon == Icon::Founder)
-                stroke(6, 14, 10, 14);
-        } else if (icon == Icon::Turbo) {
-            stroke(10, 3, 5, 9);
-            stroke(5, 9, 10, 8);
-            stroke(10, 8, 6, 13);
-        } else if (icon == Icon::Artist) {
-            stroke(5, 11, 11, 4);
-            stroke(4, 10, 7, 12);
-            stroke(3, 13, 5, 12);
-        } else if (icon == Icon::More) {
-            stroke(4, 8, 12, 8);
-            stroke(8, 4, 8, 12);
-        } else {
-            stroke(4, 8, 4, 8);
-            stroke(8, 8, 8, 8);
-            stroke(12, 8, 12, 8);
-        }
+        badge_ink(icon, [&](int x1, int y1, int x2, int y2) {
+            lv_point_t from{static_cast<lv_coord_t>(x + x1 * edge / 16), static_cast<lv_coord_t>(y + y1 * edge / 16)};
+            lv_point_t to{static_cast<lv_coord_t>(x + x2 * edge / 16), static_cast<lv_coord_t>(y + y2 * edge / 16)};
+            lv_draw_line(context, &line, &from, &to);
+        });
     }
 }
 const lv_font_t *author_font(const char *name) {
@@ -1378,6 +1449,7 @@ void render_rows() {
             const auto* full_name = plain_author(*message);
             const auto* font = author_font(full_name);
             row.badge_icons = forearm::header_badges(item.badges);
+            if(row.badge_icons.count)prepare_badge_atlas();
             const int badge_width = row.badge_icons.count * (header_icon_size() + 3);
             lv_obj_set_pos(row.badges, kSide, row_top);
             lv_obj_set_size(row.badges, std::max(1, badge_width), item.author_height);
@@ -1408,7 +1480,6 @@ void render_rows() {
             lv_obj_add_flag(rows[i].button, LV_OBJ_FLAG_HIDDEN);
         render_emotes(rows[i], nullptr);
     }
-    prepare_visible_sprites();
 }
 
 void close_overlay() {
@@ -2278,6 +2349,8 @@ void app_ui_tick() {
     // programmatic guard remains held, then commit the requested position.
     lv_obj_update_layout(chat);
     lv_obj_scroll_to_y(chat, scroll_y, LV_ANIM_OFF);
+    // Width/font changes above must be settled before capturing canvas strides.
+    prepare_visible_sprites();
     record(layout_duration, static_cast<std::uint32_t>(first_layout_us + esp_timer_get_time() - second_layout_start));
     update_guard = false;
     synchronize_anchor();

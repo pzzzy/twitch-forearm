@@ -286,6 +286,13 @@ int main() {
         assert(bounds(name).y2<bounds(lv_obj_get_child(lv_obj_get_parent(name),1)).y1);
     }
     app_ui_set_ui_scale(100);pump(128);
+    // Unknown channel badge sets remain a visible medal, never a blank tile.
+    app_ui_set_message_badges("100",id.c_str(),"[channel-badge 1] ","#54D6C7");pump(64);
+    name=compact_label(lv_scr_act(),"badge_viewer_");assert(name);
+    const auto unknown_area=bounds(lv_obj_get_child(lv_obj_get_parent(name),2));const auto unknown_pixels=capture();
+    unsigned white=0;for(int y=unknown_area.y1;y<=unknown_area.y2;++y)for(int x=unknown_area.x1;x<=unknown_area.x2;++x)
+        white+=unknown_pixels[y*320+x].full==lv_color_hex(0xFFFFFF).full;
+    assert(white>0);
     alternate=asset;alternate.data=alternate_pixels.data();
     for(unsigned i=0;i<25*28;++i){alternate_pixels[i*3]=0;alternate_pixels[i*3+1]=0xf8;alternate_pixels[i*3+2]=255;}
     const auto animation_before=capture();const auto state_before=app_ui_stats();alternate_frame=true;pump(128);const auto animation_after=capture();

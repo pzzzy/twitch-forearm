@@ -66,8 +66,10 @@ inline uint32_t badge_color(BadgeIcon icon) {
         return 0x6441A5;
     case BadgeIcon::Bits:
         return 0x007C8A;
+    case BadgeIcon::More:
+        return 0x007C8A;
     default:
-        return 0x5F6678;
+        return 0x9A6700;
     }
 }
 inline uint32_t username_color(std::string_view supplied, std::string_view name) {

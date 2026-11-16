@@ -211,7 +211,7 @@
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
     "project/core/include/forearm/chat_header.h": {
-      "sha256": "0ef475af3e2d1fb0afd09418ff2c4af7dc6cee2811f9d3475ef684cc96b6ca1c",
+      "sha256": "d0e74473d1a7fccb47647eea1d0cd883cd18e65485565687a434d71f77731d5d",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -568,7 +568,7 @@
       "basis": "Explicit SPDX; select Apache alternative for Mbed TLS"
     },
     "project/firmware/main/app_ui.cpp": {
-      "sha256": "9a91ab28d67a104b2c0f7cba00ed651777db52ae0fb309b73a50af344084ce65",
+      "sha256": "3596908f9bb7f22126b7efc1594304be63877ad9bd6450d03fae7bfc98e904b3",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -19117,6 +19117,7 @@
     "Reviewed scaled-media origin correction: only original Apache-2.0 app_ui.cpp hash changes. The LVGL image pivot is restored after source assignment. All 2027 input paths, external hashes, 449 notice blocks and five platform variants are preserved; exact rebuilt-image audit and hardware qualification remain required.",
     "Reviewed moderation preview fallback correction: only original Apache-2.0 app_ui.cpp changes to use the existing composed20 font for copied message text. No font assets, input paths, external hashes, source notices or reviewed platform variants changed. Exact rebuilt-image audit and hardware qualification remain required.",
     "Reviewed 0.6.0-dev animation and badge inputs: two added original Apache-2.0 headers (bounded GIF parser and badge captions), eight changed original project inputs, no external SDK/toolchain/font hashes or canonical license/comment blocks changed. Existing five exact Linux variants, provenance and review notes are retained. No external GIF decoder or artwork was vendored. Build freshness checks passed; this catalog does not qualify a release or hardware reliability.",
-    "Reviewed compact chat header refinement: one added original Apache-2.0 header for role-icon selection and readable username colors, five changed original UI/network inputs, no external source/toolchain/font/prebuilt hashes or license/comment blocks changed. Vector role symbols are original drawing code, not vendored artwork. Existing exact platform variants and provenance are retained. Build freshness passed; hardware/release qualification remains separate."
+    "Reviewed compact chat header refinement: one added original Apache-2.0 header for role-icon selection and readable username colors, five changed original UI/network inputs, no external source/toolchain/font/prebuilt hashes or license/comment blocks changed. Vector role symbols are original drawing code, not vendored artwork. Existing exact platform variants and provenance are retained. Build freshness passed; hardware/release qualification remains separate.",
+    "Reviewed original header-cache correction and icon-atlas drawing code: only app_ui.cpp and chat_header.h hashes change. No external inputs, artwork, font data, license/comment blocks or platform variants changed. Geometry settles before canvas preparation; bounded role atlases are original project pixels generated at runtime. Exact-image audit remains required."
   ]
 }

@@ -438,6 +438,21 @@ int main() {
         author_equivalent("scaled partial glyph clip", true, {8,12,245,72});
     }
     app_ui_set_ui_scale(100); pump(64);
+    // First paint after sequential mixed-width/color/font metadata, as on USB/EventSub.
+    fresh_authors({"PREVIEW"});
+    const char* captions[]={"[MOD] [VIP] [SUB 12m] ","[HOST] [SUB 24m] [PRIME] ","[ARTIST] [SUB 3m] ","[MOD] ","[other 1] "};
+    const char* names[]={"abcdefghijklmnopqrstuvwxy","broadcast_viewer","moonlight_artist",u8"ЖΩчат_пример","other_viewer"};
+    for(unsigned i=0;i<5;++i) {
+        const auto id="first-header-"+std::to_string(i);
+        assert(app_ui_append("100",id.c_str(),"300",names[i],"Readable chat."));
+        app_ui_set_message_badges("100",id.c_str(),captions[i],i%2?"#54D6C7":"#7EB6FF");
+        app_ui_go_live();pump(8);
+        const auto initial=render(true,{0,0,319,479},0x1357);
+        app_ui_set_author_cache(false);pump(8);
+        const auto native=render(false,{0,0,319,479},0xB46A);
+        compare_author_pixels(native,initial,{0,0,319,479},"mixed header initial cache versus native");
+        app_ui_set_author_cache(true);pump(8);
+    }
     std::printf("Native LVGL author cache: %u native-label poisoned-frame comparisons pixel-identical; ASCII25/Unicode100B/clips/pressed/mask/layers/OOM/LRU; no cache allocation/free during DRAW.\n", author_comparisons);
 }
 
