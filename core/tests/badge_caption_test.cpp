@@ -1,8 +1,22 @@
 #include "forearm/badge_caption.h"
+#include "forearm/chat_header.h"
 #include <cassert>
 #include <string>
 
 int main() {
+    using Icon = forearm::BadgeIcon;
+    const auto icons = forearm::header_badges("[SUB 12m] [VIP] [MOD] ");
+    assert(icons.count == 3 && icons.icons[0] == Icon::Mod && icons.icons[1] == Icon::Vip &&
+           icons.icons[2] == Icon::Sub);
+    const auto overflow = forearm::header_badges("[MOD] [SUB 12m] [VIP] [bits 1000] ");
+    assert(overflow.count == 3 && overflow.icons[2] == Icon::More);
+    assert(forearm::header_badges("[MOD] [MOD] ").count == 1);
+    assert(!forearm::header_badges("[unfinished").count);
+    assert(forearm::username_color("#54D6C7", "a") == 0x54D6C7);
+    assert(forearm::username_color("#000000", "a") == 0x808080);
+    assert(forearm::username_color("garbage", "a") == forearm::username_color("", "a"));
+    assert(forearm::username_color("", "a") != forearm::username_color("", "b"));
+
     char caption[96]{};
     forearm::append_badge_caption(caption, sizeof(caption), "moderator", "1", "");
     forearm::append_badge_caption(caption, sizeof(caption), "vip", "1", "");

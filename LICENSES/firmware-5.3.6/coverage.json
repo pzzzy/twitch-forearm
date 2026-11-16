@@ -210,6 +210,15 @@
       ],
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
+    "project/core/include/forearm/chat_header.h": {
+      "sha256": "0ef475af3e2d1fb0afd09418ff2c4af7dc6cee2811f9d3475ef684cc96b6ca1c",
+      "license": "Apache-2.0",
+      "license_files": [
+        "LICENSES/Apache-2.0.txt",
+        "LICENSES/firmware-5.3.6/linked-source-notices.txt"
+      ],
+      "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
+    },
     "project/core/include/forearm/chat_store.h": {
       "sha256": "a74e8476dda836f1e9543296050c7f8b07ab526d2e9cd28d588daaff99f3a1d9",
       "license": "Apache-2.0",
@@ -559,7 +568,7 @@
       "basis": "Explicit SPDX; select Apache alternative for Mbed TLS"
     },
     "project/firmware/main/app_ui.cpp": {
-      "sha256": "afe8ed0c097fb8ee4eea28591ee5db10da2168def9903371c78d5c2ab08ec9bc",
+      "sha256": "9a91ab28d67a104b2c0f7cba00ed651777db52ae0fb309b73a50af344084ce65",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -568,7 +577,7 @@
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
     "project/firmware/main/app_ui.h": {
-      "sha256": "ad8a5e8e332861b2246b69581d69c078f328050b7fa8ac33c8fc435260dc1027",
+      "sha256": "76393e7b24038aea09118db0113039e963974a95af1e804cf4225aa2051c4de1",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -622,7 +631,7 @@
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
     "project/firmware/main/main.cpp": {
-      "sha256": "a25034c8f72a9d7e8061738fb12c09250c3d725a60634fc51ea89c6cb26eaa34",
+      "sha256": "3007c21be4bf52dedaf764bf087b4c23ae3ecefe32a1b19dfd035b2003c8a59e",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -649,7 +658,7 @@
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
     "project/firmware/main/twitch_client.cpp": {
-      "sha256": "147a9b017cf2180568ae2fcde18af3a18448b2440b2df146da228c10dfe87c82",
+      "sha256": "85102e6c9bd556eb9d385d8fe3054b1fc9622a1178724fbe37d62e904e7aad92",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -658,7 +667,7 @@
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
     "project/firmware/main/twitch_client.h": {
-      "sha256": "2ac17e128a5aae9115e5c76c6418fa416f4f18e576590c19c2cd7dc2e584ef28",
+      "sha256": "5ef2e53a2024207cc197dbc12354e8b7eff339dc6509e6f37806362fdd4170cb",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -19107,6 +19116,7 @@
     "Final 0.5.0-beta.1 source review: five original Apache-2.0 input hashes updated for generation-bound current login presentation and correctly sized modal author labels. No input paths, SDK/toolchain/font hashes, license evidence, notice blocks or reviewed platform variants changed. Final linked-image audit remains required.",
     "Reviewed scaled-media origin correction: only original Apache-2.0 app_ui.cpp hash changes. The LVGL image pivot is restored after source assignment. All 2027 input paths, external hashes, 449 notice blocks and five platform variants are preserved; exact rebuilt-image audit and hardware qualification remain required.",
     "Reviewed moderation preview fallback correction: only original Apache-2.0 app_ui.cpp changes to use the existing composed20 font for copied message text. No font assets, input paths, external hashes, source notices or reviewed platform variants changed. Exact rebuilt-image audit and hardware qualification remain required.",
-    "Reviewed 0.6.0-dev animation and badge inputs: two added original Apache-2.0 headers (bounded GIF parser and badge captions), eight changed original project inputs, no external SDK/toolchain/font hashes or canonical license/comment blocks changed. Existing five exact Linux variants, provenance and review notes are retained. No external GIF decoder or artwork was vendored. Build freshness checks passed; this catalog does not qualify a release or hardware reliability."
+    "Reviewed 0.6.0-dev animation and badge inputs: two added original Apache-2.0 headers (bounded GIF parser and badge captions), eight changed original project inputs, no external SDK/toolchain/font hashes or canonical license/comment blocks changed. Existing five exact Linux variants, provenance and review notes are retained. No external GIF decoder or artwork was vendored. Build freshness checks passed; this catalog does not qualify a release or hardware reliability.",
+    "Reviewed compact chat header refinement: one added original Apache-2.0 header for role-icon selection and readable username colors, five changed original UI/network inputs, no external source/toolchain/font/prebuilt hashes or license/comment blocks changed. Vector role symbols are original drawing code, not vendored artwork. Existing exact platform variants and provenance are retained. Build freshness passed; hardware/release qualification remains separate."
   ]
 }

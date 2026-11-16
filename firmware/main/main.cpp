@@ -509,7 +509,7 @@ void command(char* input) {
             }
             ok=app_ui_append_emotes("demo",id,"fixture-viewer",*name?name:"layout_test",text,emotes,count,
                                     esp_timer_get_time()/1000,str(request,"user_login"));
-            if(ok)app_ui_set_message_badges("demo",id,str(request,"badges"));
+            if(ok)app_ui_set_message_badges("demo",id,str(request,"badges"),str(request,"color"));
         }
     }
     else if (!strcmp(cmd,"emote_seed")) {
@@ -626,7 +626,7 @@ void network_events() {
                         e.emotes[j].byte_offset,e.emotes[j].byte_length,e.emotes[j].position_valid};
                     app_ui_append_emotes(e.channel_id,e.message_id,e.user_id,e.display_name,e.text,emotes,count,
                                         esp_timer_get_time()/1000,e.user_login);
-                    app_ui_set_message_badges(e.channel_id,e.message_id,e.badge_text);
+                    app_ui_set_message_badges(e.channel_id,e.message_id,e.badge_text,e.name_color);
                     if(e.moderation_metadata_valid)
                         app_ui_set_message_moderation_metadata(e.channel_id,e.message_id,e.source_channel_id,e.source_message_id,e.moderator);
                     break;

@@ -4,7 +4,7 @@
 
 - Animated Twitch and configured-channel/global 7TV GIFs, with bounded decoding, frame storage and static poster fallback.
 - Immediate reserved inline slots for recognized emotes, avoiding trigger text flashing before graphics load. Late catalogs preserve already displayed words; new and unseen rows can enrich.
-- Username badge captions for broadcaster, mod, VIP, subscriber/months and other supplied channel badge sets; wrapping follows text size.
+- Single-line username headers with colored role icons and readable Twitch name colors. Explicit ellipses keep unusually long names compact; the tapped view retains the complete name and badge details.
 - Host coverage for GIF parsing, badge captions and animation advancement without new messages. New development-image hardware results are separate from the published beta qualification.
 
 ## Initial 0.4.0-beta.1 candidate scope (historical)

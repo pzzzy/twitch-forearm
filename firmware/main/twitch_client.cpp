@@ -1066,6 +1066,7 @@ void process_frame(RawFrame& frame) {
             // identity. Preserve the full supported name or exact login.
             if (!copy_exact(event.display_name, string_value(notification, "chatter_user_name")) || !*event.display_name)
                 copy_exact(event.display_name, event.user_login);
+            copy_exact(event.name_color, string_value(notification, "color"));
             copy_text(event.text, string_value(message, "text"));
             forearm::MessageFragmentCursor fragment_cursor(string_value(message, "text"), std::strlen(event.text));
             const auto* fragments = cJSON_GetObjectItemCaseSensitive(message, "fragments");

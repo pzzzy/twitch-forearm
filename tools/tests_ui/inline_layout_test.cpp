@@ -84,6 +84,18 @@ static std::string fresh(const char *author, const std::string &text, const char
     assert(app_ui_append("100", id.c_str(), "300", author, text.c_str(), 0, login));
     app_ui_go_live(); pump(500); return id;
 }
+// Locate the deliberately ellipsized header without changing full-name modal checks.
+static lv_obj_t* compact_label(lv_obj_t* object, const std::string& full) {
+    if (lv_obj_has_flag(object, LV_OBJ_FLAG_HIDDEN)) return nullptr;
+    if (lv_obj_check_type(object, &lv_label_class)) {
+        const std::string shown(lv_label_get_text(object));
+        if (shown == full || (shown.size() > 3 && shown.substr(shown.size()-3) == "..." &&
+            full.compare(0, shown.size()-3, shown, 0, shown.size()-3) == 0)) return object;
+    }
+    for (unsigned i=0;i<lv_obj_get_child_cnt(object);++i)
+        if (auto* result=compact_label(lv_obj_get_child(object,i),full)) return result;
+    return nullptr;
+}
 static lv_obj_t *author_row(const char *author) {
     auto *name = find_label(lv_scr_act(), author); assert(name); return lv_obj_get_parent(name);
 }
@@ -209,20 +221,22 @@ int main() {
     assert(after_arrival.paused && after_arrival.anchor_sequence == before_arrival.anchor_sequence &&
            after_arrival.anchor_offset == before_arrival.anchor_offset && after_arrival.scroll_y <= before_arrival.scroll_y);
 
-    // Full names wrap in a stable 224px column outside the cog's 72px target.
+    // Headers stay on one line; deliberate ellipses keep full identity in the tapped view.
     const std::string maximum_name(25, 'W');
     id = fresh(maximum_name.c_str(), "Readable message.");
-    auto *name = find_label(lv_scr_act(), maximum_name.c_str()); assert(name);
+    auto *name = compact_label(lv_scr_act(), maximum_name); assert(name);
     const auto name_area = bounds(name); row = lv_obj_get_parent(name); body = bounds(lv_obj_get_child(row, 1));
     assert(lv_label_get_long_mode(name) == LV_LABEL_LONG_WRAP && name_area.x2 < 248 && name_area.y2 < body.y1);
     assert(lv_obj_get_style_text_font(name, LV_PART_MAIN) == &lv_font_montserrat_20);
-    lv_point_t measured_name{};
-    lv_txt_get_size(&measured_name, maximum_name.c_str(), &lv_font_montserrat_20, 0, 4, 224, LV_TEXT_FLAG_NONE);
-    assert(lv_obj_get_height(name) == measured_name.y && measured_name.y > 23 && ink(capture(), name_area) > 0);
+    assert(lv_obj_get_height(name) == lv_font_get_line_height(&lv_font_montserrat_20));
+    assert(std::string(lv_label_get_text(name)).find("...") != std::string::npos && ink(capture(), name_area) > 0);
+    tap(30,45);pump(500);assert(find_label(lv_scr_act(),maximum_name.c_str()));
+    tap(150,440);pump(128);assert(!app_ui_stats().selection_visible);
     for (const auto &unit : {std::string(u8"Ж"), std::string(u8"Ω"), std::string(u8"🔥")}) {
         std::string unicode_name; for (unsigned i = 0; i < 25; ++i) unicode_name += unit;
         id = fresh(unicode_name.c_str(), "Readable Unicode author.");
-        name = find_label(lv_scr_act(), unicode_name.c_str()); assert(name);
+        name = compact_label(lv_scr_act(), unicode_name); assert(name);
+        assert(lv_obj_get_height(name) == lv_font_get_line_height(lv_obj_get_style_text_font(name,0)));
         assert(lv_obj_get_style_text_font(name, LV_PART_MAIN) != &lv_font_montserrat_20);
         assert(lv_font_get_line_height(lv_obj_get_style_text_font(name, LV_PART_MAIN)) == 27);
         assert(bounds(name).x2 < 248 && bounds(name).y2 < bounds(lv_obj_get_child(lv_obj_get_parent(name), 1)).y1);
@@ -240,15 +254,44 @@ int main() {
     auto *pause = lv_obj_get_parent(find_label(lv_scr_act(), LV_SYMBOL_PAUSE)); assert(pause);
     assert(lv_obj_get_width(pause) == 52 && lv_obj_get_height(pause) == 52 &&
            lv_obj_get_style_bg_opa(pause, LV_PART_MAIN) == LV_OPA_30);
-    id=fresh("badge_viewer_","Kappa");emotes(id,&first,1);
-    app_ui_set_message_badges("100",id.c_str(),"[MOD] [VIP] [SUB 12m] ");pump(64);
-    assert(find_label(lv_scr_act(),"[MOD] [VIP] [SUB 12m] badge_viewer_"));
+    fresh("PREVIEW","Header fixture");
+    id="badge-icons";assert(app_ui_append("100",id.c_str(),"300","badge_viewer_","Kappa"));
+    emotes(id,&first,1);
+    app_ui_set_message_badges("100",id.c_str(),"[MOD] [VIP] [SUB 12m] ","#54D6C7");pump(64);
+    name=compact_label(lv_scr_act(),"badge_viewer_");assert(name);
+    assert(lv_obj_get_style_text_color(name,0).full==lv_color_hex(0x54D6C7).full);
+    assert(lv_obj_get_height(name)==lv_font_get_line_height(lv_obj_get_style_text_font(name,0)));
+    auto* badges=lv_obj_get_child(lv_obj_get_parent(name),2);assert(lv_obj_get_width(badges)>1);
+    const auto icon_pixels=capture();const auto icon_area=bounds(badges);
+    for(const auto rgb:{0x00AD03u,0xD900B3u,0x9146FFu}){
+        unsigned count=0;for(int y=icon_area.y1;y<=icon_area.y2;++y)for(int x=icon_area.x1;x<=icon_area.x2;++x)
+            count+=icon_pixels[y*320+x].full==lv_color_hex(rgb).full;
+        assert(count>0);
+    }
+    const auto badge_name_area=bounds(name);tap(badge_name_area.x1+10,(badge_name_area.y1+badge_name_area.y2)/2);pump(500);assert(find_label(lv_scr_act(),"badge_viewer_"));
+    assert(find_label(lv_scr_act(),"#synthetic_room  [MOD] [VIP] [SUB 12m] "));
+    tap(150,440);pump(128);
+    app_ui_set_author_cache(false);pump(64);const auto native_header=capture();
+    app_ui_set_author_cache(true);pump(64);const auto cached_header=capture();
+    assert(!std::memcmp(native_header.data(),cached_header.data(),sizeof(native_header)));
+    for(const auto percent:{67u,75u,80u,90u,100u,115u,125u,133u,150u}) {
+        app_ui_set_ui_scale(percent);pump(128);
+        name=compact_label(lv_scr_act(),"badge_viewer_");assert(name);
+        const auto* font=lv_obj_get_style_text_font(name,0);
+        assert(lv_obj_get_height(name)==lv_font_get_line_height(font));
+        lv_point_t extent{};lv_txt_get_size(&extent,lv_label_get_text(name),font,0,0,lv_obj_get_width(name),LV_TEXT_FLAG_NONE);
+        assert(extent.y==lv_font_get_line_height(font));
+        auto* tile=lv_obj_get_child(lv_obj_get_parent(name),2);
+        assert(bounds(tile).x2<bounds(name).x1 && bounds(name).x2<248);
+        assert(bounds(name).y2<bounds(lv_obj_get_child(lv_obj_get_parent(name),1)).y1);
+    }
+    app_ui_set_ui_scale(100);pump(128);
     alternate=asset;alternate.data=alternate_pixels.data();
     for(unsigned i=0;i<25*28;++i){alternate_pixels[i*3]=0;alternate_pixels[i*3+1]=0xf8;alternate_pixels[i*3+2]=255;}
     const auto animation_before=capture();const auto state_before=app_ui_stats();alternate_frame=true;pump(128);const auto animation_after=capture();
     assert(std::memcmp(animation_before.data(),animation_after.data(),sizeof(animation_after)));
     assert(app_ui_stats().appended==state_before.appended && app_ui_stats().history_height==state_before.history_height);
-    std::puts("Inline/layout pixels passed: pending slots, animated frames, badge captions, literal fallback, arrival sprite invalidation, no duplicate/global replacement, exact UTF-8 spans, repeated and bounded8 emotes, reserved-marker collision, paused reflow anchors, full25-character names, ASCII20/Unicode24, exact login fallback pixels and52px translucent pause.");
+    std::puts("Inline/layout pixels passed: pending slots, animated frames, badge icons and name colors, literal fallback, arrival sprite invalidation, no duplicate/global replacement, exact UTF-8 spans, repeated and bounded8 emotes, reserved-marker collision, paused reflow anchors, one-line ellipsized headers and full25-character modal names, ASCII20/Unicode24, exact login fallback pixels and52px translucent pause.");
 }
 
 const lv_img_dsc_t* emote_cache_frame(const lv_img_dsc_t* image, std::uint32_t) { return alternate_frame ? &alternate : image; }

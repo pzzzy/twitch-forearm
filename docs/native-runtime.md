@@ -44,10 +44,10 @@ be undone. Twitch remains authoritative if a role or protected target changes.
 The PSRAM store holds 512 messages. Its 2,049-byte owned text field accommodates Twitch's 500-character maximum even when each codepoint uses four UTF-8 bytes. Stable IDs are rejected rather than truncated; text truncates only at a valid UTF-8 boundary. Selection is copied separately so buffer reuse cannot retarget it.
 
 Each record separately owns up to 100 UTF-8 bytes of display name and the exact
-ASCII user login of at most 25 characters. At 100%, supported Unicode names wrap at 24 px,
+ASCII user login of at most 25 characters. At 100%, supported Unicode names use 24 px,
 ASCII names use 20 px, and the author column is 224 px. Typography and column geometry
 respond to the slider while staying clear of the settings target.
-Names are not shortened. If a display name needs an unavailable glyph, the row and
+Stored identities and selected-message names are not shortened. Chat headers use explicit ellipses when necessary. If a display name needs an unavailable glyph, the row and
 selection use its full login fallback. Network normalization also uses that
 login when the supplied display name is empty or exceeds the bound; it never
 shortens a name into a partial identity. Moderation still binds the exact user
@@ -75,7 +75,10 @@ The public 7TV global and configured-channel catalogs are fetched after Twitch r
 
 The diagnostic image-seed path accepts bounded PNG/GIF fixtures using the same decoder without a CDN request and must be labeled as an offline fixture. The actual CDN path has separately downloaded and displayed Kappa, ID `25`.
 
-Username headers use EventSub badge metadata to display compact text labels: HOST, MOD, VIP, SUB with supplied subscription months, FOUNDER, ARTIST, PRIME and TURBO, followed by bounded channel/other badge-set identifiers and versions. Common role labels have priority within the 96-byte caption. These are text captions rather than downloaded official badge artwork. Headers and full names reflow together at the selected text size; the original login fallback remains intact. Badge captions are display-only and do not affect verified moderation authority.
+Username headers occupy a single line. Original native vector tiles show a red broadcaster camera, green moderator sword, magenta VIP diamond, violet subscriber/founder star, blue Prime crown and other role symbols. Up to three icons are displayed in role-priority order; a plus represents overflow, and other supplied channel badge sets use a generic mark. These are original role symbols rather than downloaded official channel artwork. Icons are noninteractive and paint without allocations; the message remains the touch target.
+
+The EventSub username color is validated and dim colors are lifted for the dark background; absent/invalid colors use a stable readable palette. The author bitmap cache keys include font, foreground and available label width, so colored names remain compatible with cached scrolling. Typography controls scale icons and text together. Names that exceed the remaining line width are shortened at a UTF-8 boundary with an explicit ellipsis. Tapping a message preserves the full supported name/login in its heading, with complete role/subscription-month/channel badge captions beside the channel in the detail line. Display icons/colors never affect verified moderation authority.
+
 
 ## Account and connection lifecycle
 

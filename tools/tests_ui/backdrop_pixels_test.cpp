@@ -324,8 +324,8 @@ int main() {
     author_equivalent("full author/body edge clip", true, {0, 8, 319, 48});
     const std::string maximum_name(25, 'W');
     fresh_authors({maximum_name, "next_viewer"});
-    author_equivalent("wrapped25-character ASCII", true);
-    author_equivalent("wrapped line partial clip", true, {20, 38, 200, 70});
+    author_equivalent("ellipsized25-character ASCII", true);
+    author_equivalent("single header partial clip", true, {20, 12, 200, 25});
     for (unsigned start = 0x20; start <= 0x7E; start += 24) {
         std::string printable;
         for (unsigned c = start; c <= 0x7E && c < start + 24; ++c) printable += static_cast<char>(c);
@@ -411,8 +411,14 @@ int main() {
     forearm_ui_test_fail_large_allocations = false;
     author_equivalent("author allocation recovery", true);
     fresh_authors({std::string(100, 'W')});
-    author_equivalent("oversized author uses native", false);
-    assert(!app_ui_stats().author_cache_bytes);
+    author_equivalent("oversized author compact header", true);
+    assert(app_ui_stats().author_cache_bytes);
+    fresh_authors({"PREVIEW", "badge_viewer_"});
+    app_ui_set_message_badges("100", "author-1", "[MOD] [VIP] [SUB 12m] ", "#54D6C7");pump(64);
+    author_equivalent("colored icons and variable header width", true);
+    author_equivalent("icons and author clipped together", true, {10,75,245,110});
+    app_ui_set_message_badges("100", "author-1", "[MOD] [VIP] [SUB 12m] ", "#7EB6FF");pump(64);
+    author_equivalent("name color invalidates original cached foreground", true);
     fresh_authors({"shared_viewer", "shared_viewer", "shared_viewer", "shared_viewer"});
     const auto shared_builds = app_ui_stats().author_cache_builds;
     author_equivalent("shared author cache identity", true);
