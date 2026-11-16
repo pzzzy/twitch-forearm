@@ -30,7 +30,7 @@ The development image displayed a real configured-channel 7TV GIF fetched over H
 
 Injected dense-chat scrolling measured 29.56 completed panel frames/s programmatically, 30.15 during a held contact, and 27.91 across ten gestures including release idle/USB overhead. That workload used plain synthetic messages and the saved 67% size; it does not establish the same rate for many simultaneous animations. No Twitch posts or moderation actions were sent, and the configured channel profile remained read-only.
 
-The bounded decoder was compared with an independent decoder on an original three-frame fixture, a 51-frame public 7TV GIF and a partial-frame/transparency/disposal fixture. Truncation/mutation checks ran under ASan/UBSan. Actual-LVGL host tests cover pending slots, idle animation frame changes, caption wrapping and existing scroll/lease contracts. The 512-record layout table now includes a fixed 96-byte badge caption per record (48 KiB additional PSRAM).
+The bounded decoder was compared with an independent decoder on an original three-frame fixture, a 51-frame public 7TV GIF and a partial-frame/transparency/disposal fixture. Truncation/mutation checks ran under ASan/UBSan. Actual-LVGL host tests cover pending slots, idle animation frame changes, caption wrapping, pixel-identical already-displayed text across a late catalog refresh, first-paint enrichment and existing scroll/lease contracts. The 512-record layout table now includes a fixed 96-byte badge caption per record (48 KiB additional PSRAM).
 
 These are development checks, not release qualification. Published 0.5.0-beta.1 binaries and their qualification identity remain unchanged. A new downloadable release requires its own exact-image checks.
 

@@ -559,7 +559,7 @@
       "basis": "Explicit SPDX; select Apache alternative for Mbed TLS"
     },
     "project/firmware/main/app_ui.cpp": {
-      "sha256": "6d729a9289093a9d1fddc836c440e05d9157c8985825588b1a39c711e1947508",
+      "sha256": "afe8ed0c097fb8ee4eea28591ee5db10da2168def9903371c78d5c2ab08ec9bc",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",

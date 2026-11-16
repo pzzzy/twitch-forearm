@@ -72,6 +72,7 @@ struct Layout {
     std::uint16_t author_height = 27;
     std::uint16_t revision = 1;
     std::uint32_t catalog_generation = 0;
+    bool presented = false;
 };
 struct Row {
     lv_obj_t *button = nullptr;
@@ -1125,6 +1126,9 @@ void refresh_one_catalog_message() {
     }
     auto &item = layout[index];
     item.catalog_generation = last_catalog_generation;
+    // Never reinterpret text the reader has already seen. Known image slots
+    // still acquire/animate when ready; new/unseen rows can use late catalogs.
+    if (item.presented) return;
     const auto *message = store->at(index);
     if (!message || message->deleted) return;
     std::array<forearm::MediaOccurrence, 8> occurrences{};
@@ -1248,6 +1252,8 @@ void render_rows() {
         const auto &item = layout[wanted[i]];
         const auto *message = store->at(wanted[i]);
         if (!message) continue;
+        if (positions[i] < scroll_y + chat_height && positions[i] + item.height > scroll_y)
+            layout[wanted[i]].presented = true;
         if (lv_obj_has_flag(row.button, LV_OBJ_FLAG_HIDDEN))
             lv_obj_clear_flag(row.button, LV_OBJ_FLAG_HIDDEN);
         if (row.top != positions[i]) {
