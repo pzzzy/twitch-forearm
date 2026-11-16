@@ -649,7 +649,7 @@
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
     "project/firmware/main/twitch_client.cpp": {
-      "sha256": "937b66ed23febd9d99b3d16aa7262d13814197bdc2cba8c13465ee04d29ce02c",
+      "sha256": "147a9b017cf2180568ae2fcde18af3a18448b2440b2df146da228c10dfe87c82",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",

@@ -1310,7 +1310,8 @@ void worker(void*) {
             }
         }
         if (account_validated && active_socket < 0 && handoff_socket < 0 && now_ms() >= next_network_attempt_ms) {
-            if (!emote_cache_stats().catalog_ready && now_ms()-last_validation_ms < 8000) {
+            // A global-only catalog cannot recognize the configured room's aliases.
+            if (!emote_cache_stats().catalog_channel_matched && now_ms()-last_validation_ms < 8000) {
                 state_message("Loading channel emotes"); vTaskDelay(pdMS_TO_TICKS(100)); continue;
             }
             state_message("Connecting to Twitch chat");
