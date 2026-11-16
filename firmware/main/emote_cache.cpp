@@ -243,6 +243,7 @@ bool decode_animation(Entry &entry, const Download &source) {
         heap_caps_malloc(sizeof(forearm::GifWorkspace), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
     if (!workspace)
         return false;
+    new (workspace) forearm::GifWorkspace();
     // Validate the entire bounded stream before allocating published frame pixels.
     unsigned frames = 0, width = 0, height = 0;
     uint32_t duration = 0;

@@ -595,7 +595,7 @@
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
     "project/firmware/main/emote_cache.cpp": {
-      "sha256": "9198d1e9f8eaadd008005d644e893ff450aae2a38a4e78200771c75bea9d87cc",
+      "sha256": "349ef9c6c8fd83dfb3ce207e7aa2e0c3040735d20badc0c60a730d7c198f999a",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
