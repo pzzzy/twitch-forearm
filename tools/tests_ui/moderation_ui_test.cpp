@@ -98,7 +98,7 @@ static void fresh_message(const char *id = "message-1", const char *author = "Ta
     pump(500);
 }
 static void select_message() {
-    tap(30, 45);
+    tap(242, 45);
     pump(500);
     assert(app_ui_stats().selection_visible);
 }

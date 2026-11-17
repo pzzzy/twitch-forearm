@@ -162,7 +162,7 @@ int main() {
     const auto start = multibyte.find(u8"にこ");
     const AppUiEmote unicode{"25", u8"にこ", static_cast<std::uint16_t>(start), 6, true}; emotes(id, &unicode, 1);
     visible.clear(); images(author_row("viewer_name_"), visible); assert(visible.size() == 1 && bounds(visible[0]).x1 > 30);
-    tap(30, 45); pump(500); assert(find_label(lv_scr_act(), multibyte.c_str())); // Raw message stays intact.
+    tap(242, 45); pump(500); assert(find_label(lv_scr_act(), multibyte.c_str())); // Raw message stays intact.
     app_ui_go_live(); pump(64);
     for (const AppUiEmote invalid : {AppUiEmote{"25", u8"にこ", 3, 6, true},
                                     AppUiEmote{"25", "wrong", static_cast<std::uint16_t>(start), 5, true},
@@ -230,7 +230,7 @@ int main() {
     assert(lv_obj_get_style_text_font(name, LV_PART_MAIN) == &lv_font_montserrat_20);
     assert(lv_obj_get_height(name) == lv_font_get_line_height(&lv_font_montserrat_20));
     assert(std::string(lv_label_get_text(name)).find("...") != std::string::npos && ink(capture(), name_area) > 0);
-    tap(30,45);pump(500);assert(find_label(lv_scr_act(),maximum_name.c_str()));
+    tap(242,45);pump(500);assert(find_label(lv_scr_act(),maximum_name.c_str()));
     tap(150,440);pump(128);assert(!app_ui_stats().selection_visible);
     for (const auto &unit : {std::string(u8"Ж"), std::string(u8"Ω"), std::string(u8"🔥")}) {
         std::string unicode_name; for (unsigned i = 0; i < 25; ++i) unicode_name += unit;
@@ -248,12 +248,13 @@ int main() {
     id = fresh("viewer_name_", "Unsupported display script uses the exact login.", "viewer_name_");
     const auto login_pixels = capture();
     assert(!std::memcmp(fallback_pixels.data(), login_pixels.data(), sizeof(login_pixels)));
-    tap(30, 45); pump(500); assert(find_label(lv_scr_act(), "viewer_name_"));
+    tap(242, 45); pump(500); assert(find_label(lv_scr_act(), "viewer_name_"));
     app_ui_go_live(); pump(64);
     id = fresh("viewer_name_", std::string(500, 'W'));
     auto *pause = lv_obj_get_parent(find_label(lv_scr_act(), LV_SYMBOL_PAUSE)); assert(pause);
     assert(lv_obj_get_width(pause) == 52 && lv_obj_get_height(pause) == 52 &&
-           lv_obj_get_style_bg_opa(pause, LV_PART_MAIN) == LV_OPA_30);
+           lv_obj_get_style_bg_opa(pause, LV_PART_MAIN) == LV_OPA_30 &&
+           bounds(pause).x1 == 10 && bounds(pause).y1 == 10);
     fresh("PREVIEW","Header fixture");
     id="badge-icons";assert(app_ui_append("100",id.c_str(),"300","badge_viewer_","Kappa"));
     emotes(id,&first,1);

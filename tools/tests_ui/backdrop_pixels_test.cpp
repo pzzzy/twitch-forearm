@@ -265,7 +265,7 @@ int main() {
 
     app_ui_show_setup("Setup overlay", "Opaque overlay must restore the complete backdrop.");
     equivalent("opaque setup overlay", false); back();
-    tap(30, 45); pump(500); assert(app_ui_stats().selection_visible);
+    tap(242, 45); pump(500); assert(app_ui_stats().selection_visible);
     equivalent("message-selection overlay", false); back();
     app_ui_set_login("https://www.twitch.tv/activate", "ABCD-EFGH");
     equivalent("login QR overlay", false); app_ui_hide_login(); pump(64);

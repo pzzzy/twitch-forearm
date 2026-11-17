@@ -41,7 +41,7 @@ static void tap_button(const char* text){auto* obj=button(text);lv_obj_scroll_to
 static void settings(){tap(284,36);pump();}
 static void back(){tap_button(LV_SYMBOL_LEFT "  Back");pump(500);}
 static void back_chat(){tap_button(LV_SYMBOL_LEFT "  Back to chat");pump(500);}
-static void select(){pump(64);static unsigned attempt; ++attempt; tap(30,45);pump(500); if(!app_ui_stats().selection_visible)std::fprintf(stderr,"Profile selection attempt%u failed; retained%u paused%d\n",attempt,app_ui_stats().retained,app_ui_stats().paused);assert(app_ui_stats().selection_visible);}
+static void select(){pump(64);static unsigned attempt; ++attempt; tap(242,45);pump(500); if(!app_ui_stats().selection_visible)std::fprintf(stderr,"Profile selection attempt%u failed; retained%u paused%d\n",attempt,app_ui_stats().retained,app_ui_stats().paused);assert(app_ui_stats().selection_visible);}
 int main(){
     lv_init();static lv_color_t pixels[320*32];static lv_disp_draw_buf_t buffer;
     lv_disp_draw_buf_init(&buffer,pixels,nullptr,320*32);

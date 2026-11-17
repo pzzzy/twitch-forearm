@@ -18,7 +18,7 @@ This is the owner's purchase reference; the listing redirects automated access t
 
 ## Current application
 
-- Portrait chat fills the panel, with floating 52 px settings and pause controls. The settings circle has an invisible 72 × 72 px corner touch target; drags do not open it.
+- Portrait chat fills the panel, with a floating 52 px pause control at top left and Settings opposite at top right. The settings circle has an invisible 72 × 72 px corner touch target; drags do not open it.
 - Dragging pauses live following. Reception continues while paused, with unread counts and an explicit Go live control.
 - PSRAM retains up to 512 messages. Each text field accommodates a full 500-character message, including 500 four-byte Unicode codepoints.
 - Settings previews nine text/UI levels live, from 67% to 150% (16–36 px chat text), and saves the selected level on release. Extended Latin, Greek, Cyrillic and punctuation remain available. Buttons retain at least 44 px touch targets.

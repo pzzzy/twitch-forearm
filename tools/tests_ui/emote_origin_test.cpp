@@ -66,6 +66,8 @@ int main() {
     app_ui_init(); app_ui_set_authenticated("Synthetic owner", "synthetic_room");
     for (const auto percent : {67U, 75U, 80U, 90U, 100U, 115U, 125U, 133U, 150U}) {
         app_ui_set_ui_scale(percent); app_ui_set_fixture_mode(false); app_ui_set_fixture_mode(true);
+        // Keep the isolated image-origin comparison below floating top controls.
+        assert(app_ui_append("100", "leading-row", "301", "viewer", "A short leading message."));
         assert(app_ui_append("100", "image-origin", "300", "viewer", "emote"));
         lv_obj_t *reused = nullptr;
         for (const auto &asset : assets) {

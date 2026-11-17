@@ -348,23 +348,24 @@ void update_status() {
     static bool previous_paused = false;
     const bool paused = store->paused();
     if (paused) {
-        if (store->unread()) std::snprintf(caption, sizeof(caption), LV_SYMBOL_DOWN " Go live / %lu", static_cast<unsigned long>(store->unread()));
+        if (store->unread() > 9999) std::snprintf(caption, sizeof(caption), LV_SYMBOL_DOWN " Go live / 9999+");
+        else if (store->unread()) std::snprintf(caption, sizeof(caption), LV_SYMBOL_DOWN " Go live / %lu", static_cast<unsigned long>(store->unread()));
         else std::snprintf(caption, sizeof(caption), LV_SYMBOL_DOWN "  Go live");
     } else std::snprintf(caption, sizeof(caption), LV_SYMBOL_PAUSE);
     if (paused == previous_paused && !std::strcmp(caption, previous_caption)) return;
     std::snprintf(previous_caption, sizeof(previous_caption), "%s", caption);
     previous_paused = paused;
     if (paused) {
-        const int pill_width = store->unread() > 9999 ? 252 : store->unread() ? 220 : 160;
+        const int pill_width = store->unread() > 9999 ? 228 : store->unread() ? 220 : 160;
         lv_obj_set_size(follow_button, pill_width, 52);
-        lv_obj_set_pos(follow_button, width - pill_width - 10, height - 62);
+        lv_obj_set_pos(follow_button, 10, 10);
         lv_obj_set_width(follow_label, pill_width - 16);
         lv_obj_set_style_radius(follow_button, 26, 0);
         lv_obj_set_style_bg_color(follow_button, color(0x8E60C8), 0);
         lv_obj_set_style_bg_opa(follow_button, LV_OPA_COVER, 0);
     } else {
         lv_obj_set_size(follow_button, 52, 52);
-        lv_obj_set_pos(follow_button, width - 62, height - 62);
+        lv_obj_set_pos(follow_button, 10, 10);
         lv_obj_set_width(follow_label, 40);
         lv_obj_set_style_radius(follow_button, LV_RADIUS_CIRCLE, 0);
         lv_obj_set_style_bg_color(follow_button, color(kSurface), 0);
@@ -2206,9 +2207,9 @@ void app_ui_init() {
     lv_obj_set_style_text_align(settings_caption, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_center(settings_caption);
     lv_obj_add_event_cb(settings_hit, settings_event, LV_EVENT_ALL, nullptr);
-    follow_button = button(screen, LV_SYMBOL_PAUSE, width - 62, height - 62, 52, 52, follow_event, kSurface);
+    follow_button = button(screen, LV_SYMBOL_PAUSE, 10, 10, 52, 52, follow_event, kSurface);
     follow_label = lv_obj_get_child(follow_button, 0);
-    fixture_badge = label(screen, "SYNTHETIC FIXTURE", 12, 10, 190, &lv_font_montserrat_16, kAmber);
+    fixture_badge = label(screen, "SYNTHETIC FIXTURE", 12, height - 28, 190, &lv_font_montserrat_16, kAmber);
     lv_obj_set_style_bg_color(fixture_badge, color(kSurface), 0);
     lv_obj_set_style_bg_opa(fixture_badge, LV_OPA_COVER, 0);
     lv_obj_add_flag(fixture_badge, LV_OBJ_FLAG_HIDDEN);
