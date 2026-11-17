@@ -1,4 +1,5 @@
 #include "app_ui.h"
+#include "forearm/chat_header.h"
 
 #include <algorithm>
 #include <array>
@@ -65,17 +66,22 @@ struct ModerationMetadata {
 
 struct Layout {
     std::uint64_t sequence = 0;
+    char badges[96]{};
+    std::uint32_t name_color = 0;
     std::int32_t height = 0;
     EmoteRow *emotes = nullptr;
     ModerationMetadata *moderation = nullptr;
     std::uint16_t author_height = 27;
     std::uint16_t revision = 1;
     std::uint32_t catalog_generation = 0;
+    bool presented = false;
 };
 struct Row {
     lv_obj_t *button = nullptr;
     lv_obj_t *author = nullptr;
     lv_obj_t *body = nullptr;
+    lv_obj_t *badges = nullptr;
+    forearm::HeaderBadges badge_icons{};
     char *body_text = nullptr;
     lv_draw_label_hint_t text_hint{-1, 0, 0};
     std::uint64_t sequence = 0;
@@ -224,10 +230,10 @@ forearm::ModerationCapabilities moderation_caps{};
 forearm::ModerationRequest moderation_target{};
 forearm::ModerationRequest pending_moderation{};
 forearm::ModerationResult moderation_result{};
-char selected_author[101]{};
-char selected_channel[96]{};
-char pending_author[101]{};
-char pending_channel[96]{};
+char selected_author[224]{};
+char selected_channel[224]{};
+char pending_author[224]{};
+char pending_channel[224]{};
 bool selected_metadata_verified = false;
 bool pending_metadata_verified = false;
 bool moderation_pending = false;
@@ -342,23 +348,24 @@ void update_status() {
     static bool previous_paused = false;
     const bool paused = store->paused();
     if (paused) {
-        if (store->unread()) std::snprintf(caption, sizeof(caption), LV_SYMBOL_DOWN " Go live / %lu", static_cast<unsigned long>(store->unread()));
+        if (store->unread() > 9999) std::snprintf(caption, sizeof(caption), LV_SYMBOL_DOWN " Go live / 9999+");
+        else if (store->unread()) std::snprintf(caption, sizeof(caption), LV_SYMBOL_DOWN " Go live / %lu", static_cast<unsigned long>(store->unread()));
         else std::snprintf(caption, sizeof(caption), LV_SYMBOL_DOWN "  Go live");
     } else std::snprintf(caption, sizeof(caption), LV_SYMBOL_PAUSE);
     if (paused == previous_paused && !std::strcmp(caption, previous_caption)) return;
     std::snprintf(previous_caption, sizeof(previous_caption), "%s", caption);
     previous_paused = paused;
     if (paused) {
-        const int pill_width = store->unread() > 9999 ? 252 : store->unread() ? 220 : 160;
+        const int pill_width = store->unread() > 9999 ? 228 : store->unread() ? 220 : 160;
         lv_obj_set_size(follow_button, pill_width, 52);
-        lv_obj_set_pos(follow_button, width - pill_width - 10, height - 62);
+        lv_obj_set_pos(follow_button, 10, 10);
         lv_obj_set_width(follow_label, pill_width - 16);
         lv_obj_set_style_radius(follow_button, 26, 0);
         lv_obj_set_style_bg_color(follow_button, color(0x8E60C8), 0);
         lv_obj_set_style_bg_opa(follow_button, LV_OPA_COVER, 0);
     } else {
         lv_obj_set_size(follow_button, 52, 52);
-        lv_obj_set_pos(follow_button, width - 62, height - 62);
+        lv_obj_set_pos(follow_button, 10, 10);
         lv_obj_set_width(follow_label, 40);
         lv_obj_set_style_radius(follow_button, LV_RADIUS_CIRCLE, 0);
         lv_obj_set_style_bg_color(follow_button, color(kSurface), 0);
@@ -379,9 +386,180 @@ bool emote_glyph(const lv_font_t *, lv_font_glyph_dsc_t *out, std::uint32_t lett
 }
 const std::uint8_t *emote_bitmap(const lv_font_t *, std::uint32_t) { return nullptr; }
 
-const char *display_author(const forearm::Message &message) {
+const char *plain_author(const forearm::Message &message) {
     return !message.user_login.view().empty() && !forearm_font_supports_text(message.display_name.c_str()) ?
            message.user_login.c_str() : message.display_name.c_str();
+}
+int header_icon_size() { return std::clamp<int>(lv_font_get_line_height(ascii_author_font) * 3 / 4, 12, 18); }
+void compact_author(const char *full, const lv_font_t *font, int available, char *out, std::size_t bytes) {
+    std::snprintf(out, bytes, "%s", full);
+    auto length = std::strlen(out);
+    if (lv_txt_get_width(out, length, font, 0, LV_TEXT_FLAG_NONE) <= available)
+        return;
+    length = std::min(length, bytes - 4);
+    while (length && (static_cast<unsigned char>(out[length]) & 0xC0) == 0x80)
+        --length;
+    for (;;) {
+        std::memcpy(out + length, "...", 4);
+        if (lv_txt_get_width(out, length + 3, font, 0, LV_TEXT_FLAG_NONE) <= available || !length)
+            break;
+        --length;
+        while (length && (static_cast<unsigned char>(out[length]) & 0xC0) == 0x80)
+            --length;
+    }
+}
+template <class Stroke> void badge_ink(forearm::BadgeIcon icon, Stroke stroke) {
+    using Icon = forearm::BadgeIcon;
+    if (icon == Icon::Mod) {
+        stroke(4, 12, 12, 3);
+        stroke(4, 8, 8, 12);
+        stroke(3, 13, 5, 11);
+    } else if (icon == Icon::Vip || icon == Icon::Bits) {
+        stroke(8, 3, 12, 8);
+        stroke(12, 8, 8, 13);
+        stroke(8, 13, 3, 8);
+        stroke(3, 8, 8, 3);
+        if (icon == Icon::Bits)
+            stroke(8, 5, 8, 11);
+    } else if (icon == Icon::Host) {
+        stroke(3, 5, 9, 5);
+        stroke(9, 5, 9, 11);
+        stroke(9, 11, 3, 11);
+        stroke(3, 11, 3, 5);
+        stroke(9, 7, 13, 5);
+        stroke(13, 5, 13, 11);
+        stroke(13, 11, 9, 9);
+    } else if (icon == Icon::Prime) {
+        stroke(3, 5, 5, 11);
+        stroke(5, 11, 11, 11);
+        stroke(11, 11, 13, 5);
+        stroke(3, 5, 6, 8);
+        stroke(6, 8, 8, 4);
+        stroke(8, 4, 10, 8);
+        stroke(10, 8, 13, 5);
+    } else if (icon == Icon::Sub || icon == Icon::Founder) {
+        const int points[][2] = {{8, 2},  {10, 6}, {14, 7}, {11, 10}, {12, 14}, {8, 12},
+                                 {4, 14}, {5, 10}, {2, 7},  {6, 6},   {8, 2}};
+        for (unsigned j = 0; j < 10; ++j)
+            stroke(points[j][0], points[j][1], points[j + 1][0], points[j + 1][1]);
+        if (icon == Icon::Founder)
+            stroke(6, 14, 10, 14);
+    } else if (icon == Icon::Turbo) {
+        stroke(10, 3, 5, 9);
+        stroke(5, 9, 10, 8);
+        stroke(10, 8, 6, 13);
+    } else if (icon == Icon::Artist) {
+        stroke(5, 11, 11, 4);
+        stroke(4, 10, 7, 12);
+        stroke(3, 13, 5, 12);
+    } else if (icon == Icon::More) {
+        stroke(4, 8, 12, 8);
+        stroke(8, 4, 8, 12);
+    } else {
+        stroke(8, 3, 11, 6);
+        stroke(11, 6, 8, 9);
+        stroke(8, 9, 5, 6);
+        stroke(5, 6, 8, 3);
+        stroke(6, 8, 5, 13);
+        stroke(5, 13, 8, 11);
+        stroke(8, 11, 11, 13);
+        stroke(11, 13, 10, 8);
+    }
+}
+struct BadgeAtlas {
+    lv_color_t *pixels = nullptr;
+    std::array<lv_img_dsc_t, 11> icons{};
+};
+std::array<BadgeAtlas, 7> badge_atlases{}; // Edges 12..18; at most 50 KiB PSRAM.
+lv_obj_t *badge_canvas = nullptr;
+lv_color_t badge_canvas_dummy{};
+bool author_style_safe(const Row &row);
+void prepare_badge_atlas() {
+    const int edge = header_icon_size();
+    auto &atlas = badge_atlases[edge - 12];
+    if (atlas.pixels || !author_cache_enabled)
+        return;
+    const unsigned frame_pixels = edge * edge;
+    auto *pixels = static_cast<lv_color_t *>(
+        heap_caps_malloc(frame_pixels * 11 * sizeof(lv_color_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    if (!pixels)
+        return;
+    if (!badge_canvas) {
+        badge_canvas = lv_canvas_create(screen);
+        if (!badge_canvas) {
+            heap_caps_free(pixels);
+            return;
+        }
+        lv_obj_add_flag(badge_canvas, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(badge_canvas, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    }
+    lv_draw_line_dsc_t line;
+    lv_draw_line_dsc_init(&line);
+    line.color = color(0xFFFFFF);
+    line.width = edge >= 16 ? 2 : 1;
+    line.round_start = line.round_end = true;
+    for (unsigned i = 0; i < atlas.icons.size(); ++i) {
+        auto *buffer = pixels + i * frame_pixels;
+        lv_color_fill(buffer, color(kInk), frame_pixels);
+        lv_canvas_set_buffer(badge_canvas, buffer, edge, edge, LV_IMG_CF_TRUE_COLOR);
+        lv_draw_rect_dsc_t tile;
+        lv_draw_rect_dsc_init(&tile);
+        tile.bg_color = color(forearm::badge_color(static_cast<forearm::BadgeIcon>(i)));
+        tile.radius = 2;
+        lv_canvas_draw_rect(badge_canvas, 0, 0, edge, edge, &tile);
+        badge_ink(static_cast<forearm::BadgeIcon>(i), [&](int x1, int y1, int x2, int y2) {
+            lv_point_t points[] = {{static_cast<lv_coord_t>(x1 * edge / 16), static_cast<lv_coord_t>(y1 * edge / 16)},
+                                   {static_cast<lv_coord_t>(x2 * edge / 16), static_cast<lv_coord_t>(y2 * edge / 16)}};
+            lv_canvas_draw_line(badge_canvas, points, 2, &line);
+        });
+        auto &image = atlas.icons[i];
+        image.header.cf = LV_IMG_CF_TRUE_COLOR;
+        image.header.w = edge;
+        image.header.h = edge;
+        image.data_size = frame_pixels * sizeof(lv_color_t);
+        image.data = reinterpret_cast<const uint8_t *>(buffer);
+    }
+    lv_canvas_set_buffer(badge_canvas, &badge_canvas_dummy, 1, 1, LV_IMG_CF_TRUE_COLOR);
+    atlas.pixels = pixels; // Publish only complete immutable sprites outside DRAW.
+}
+void badge_draw_event(lv_event_t *event) {
+    const auto &row = *static_cast<Row *>(lv_event_get_user_data(event));
+    if (!row.badge_icons.count)
+        return;
+    auto *context = lv_event_get_draw_ctx(event);
+    lv_area_t bounds;
+    lv_obj_get_coords(row.badges, &bounds);
+    const int edge = header_icon_size(), y = bounds.y1 + (lv_area_get_height(&bounds) - edge) / 2;
+    const auto &atlas = badge_atlases[edge - 12];
+    // Opaque sprites are valid only on the same proven ink background as names.
+    const bool cached = author_cache_enabled && atlas.pixels && author_style_safe(row);
+    lv_draw_line_dsc_t line;
+    lv_draw_line_dsc_init(&line);
+    line.color = color(0xFFFFFF);
+    line.width = edge >= 16 ? 2 : 1;
+    line.round_start = line.round_end = true;
+    for (unsigned i = 0; i < row.badge_icons.count; ++i) {
+        const auto icon = row.badge_icons.icons[i];
+        const int x = bounds.x1 + i * (edge + 3);
+        lv_area_t area{static_cast<lv_coord_t>(x), static_cast<lv_coord_t>(y), static_cast<lv_coord_t>(x + edge - 1),
+                       static_cast<lv_coord_t>(y + edge - 1)};
+        if (cached) {
+            lv_draw_img_dsc_t image;
+            lv_draw_img_dsc_init(&image);
+            lv_draw_img(context, &image, &area, &atlas.icons[static_cast<unsigned>(icon)]);
+            continue;
+        }
+        lv_draw_rect_dsc_t tile;
+        lv_draw_rect_dsc_init(&tile);
+        tile.bg_color = color(forearm::badge_color(icon));
+        tile.radius = 2;
+        lv_draw_rect(context, &tile, &area);
+        badge_ink(icon, [&](int x1, int y1, int x2, int y2) {
+            lv_point_t from{static_cast<lv_coord_t>(x + x1 * edge / 16), static_cast<lv_coord_t>(y + y1 * edge / 16)};
+            lv_point_t to{static_cast<lv_coord_t>(x + x2 * edge / 16), static_cast<lv_coord_t>(y + y2 * edge / 16)};
+            lv_draw_line(context, &line, &from, &to);
+        });
+    }
 }
 const lv_font_t *author_font(const char *name) {
     for (const auto *c = reinterpret_cast<const unsigned char *>(name); *c; ++c)
@@ -452,7 +630,7 @@ void body_text(const forearm::Message &message, const EmoteRow *emotes, char *ou
     while (source < length && written + 5 < kBodyBytes) {
         unsigned replacement = 8;
         if (emotes) for (unsigned i = 0; i < emotes->count; ++i)
-            if ((emotes->ready_mask & (1U << i)) && source == emotes->offsets[i]) { replacement = i; break; }
+            if (source == emotes->offsets[i]) { replacement = i; break; }
         if (replacement < 8) {
             const auto marker = kEmoteMarker + replacement;
             out[written++] = static_cast<char>(0xF0 | (marker >> 18));
@@ -495,8 +673,7 @@ std::int32_t measure_message(const forearm::Message &message, const EmoteRow *em
     InlineMetrics metrics{emotes ? emotes->advances : nullptr};
     char text[kBodyBytes];
     body_text(message, emotes, text);
-    const auto *name = display_author(message);
-    const auto author = text_height(name, author_font(name), kAuthorWidth);
+    const auto author = lv_font_get_line_height(author_font(plain_author(message)));
     if (author_height) *author_height = static_cast<std::uint16_t>(author);
     return std::max<int>(minimum_row_height, header_gap + author + text_height(text, &inline_font, width - 2 * kSide) + body_bottom);
 }
@@ -597,7 +774,7 @@ bool author_style_safe(const Row &row) {
 bool author_image_area(const Row &row, lv_area_t &area, int &gutter) {
     lv_obj_get_coords(row.author, &area);
     gutter = _lv_obj_get_ext_draw_size(row.author);
-    if (gutter < 0 || gutter >= row_top || lv_area_get_width(&area) != kAuthorWidth ||
+    if (gutter < 0 || gutter >= row_top || lv_area_get_width(&area) != lv_obj_get_width(row.author) ||
         lv_area_get_height(&area) != row.body_y - header_gap) return false;
     area.x1 -= gutter; area.x2 += gutter;
     area.y1 -= gutter; area.y2 += gutter;
@@ -661,10 +838,10 @@ bool opaque_author_area(const Row &row, const lv_area_t &clip, lv_area_t &area) 
     const auto *sprite = find_author_sprite(row);
     if (!sprite || sprite->image.header.cf != LV_IMG_CF_TRUE_COLOR ||
         sprite->image.data != reinterpret_cast<const std::uint8_t *>(sprite->pixels) ||
-        sprite->image.header.w != kAuthorWidth + 2 * gutter ||
+        sprite->image.header.w != lv_obj_get_width(row.author) + 2 * gutter ||
         sprite->image.header.h != sprite->height + 2 * gutter ||
         sprite->image.data_size != sprite->bytes ||
-        sprite->bytes != (kAuthorWidth + 2 * gutter) * (sprite->height + 2 * gutter) * sizeof(lv_color_t)) return false;
+        sprite->bytes != (lv_obj_get_width(row.author) + 2 * gutter) * (sprite->height + 2 * gutter) * sizeof(lv_color_t)) return false;
     if (!_lv_area_intersect(&area, &area, &clip)) return false;
     for (auto *obj = row.button; obj; obj = lv_obj_get_parent(obj)) {
         lv_area_t bounds;
@@ -836,7 +1013,7 @@ void prepare_author_sprite(Row &row) {
     if (row.author_attempted) return;
     row.author_attempted = true;
     const int author_height = row.body_y - header_gap;
-    const int image_width = kAuthorWidth + 2 * gutter;
+    const int image_width = lv_obj_get_width(row.author) + 2 * gutter;
     const int image_height = author_height + 2 * gutter;
     const auto bytes = static_cast<std::size_t>(image_width) * image_height * sizeof(lv_color_t);
     const auto *name = lv_label_get_text(row.author);
@@ -865,7 +1042,7 @@ void prepare_author_sprite(Row &row) {
     lv_draw_label_dsc_init(&descriptor);
     lv_obj_init_draw_label_dsc(row.author, LV_PART_MAIN, &descriptor);
     lv_bidi_calculate_align(&descriptor.align, &descriptor.bidi_dir, name);
-    lv_canvas_draw_text(sprite_canvas, gutter, gutter, kAuthorWidth, &descriptor, name);
+    lv_canvas_draw_text(sprite_canvas, gutter, gutter, lv_obj_get_width(row.author), &descriptor, name);
     lv_canvas_set_buffer(sprite_canvas, &sprite_canvas_dummy, 1, 1, LV_IMG_CF_TRUE_COLOR);
     const auto elapsed = static_cast<std::uint32_t>(esp_timer_get_time() - started);
     author_cache_build_total_us += elapsed;
@@ -1023,6 +1200,7 @@ void render_emotes(Row &row, const Layout *item) {
             row.images[i] = lv_img_create(row.button);
             lv_obj_clear_flag(row.images[i], LV_OBJ_FLAG_CLICKABLE);
         }
+        source = emote_cache_frame(source, static_cast<uint32_t>(now_ms()));
         if (lv_img_get_src(row.images[i]) != source) {
             lv_img_set_src(row.images[i], source);
         }
@@ -1113,6 +1291,9 @@ void refresh_one_catalog_message() {
     }
     auto &item = layout[index];
     item.catalog_generation = last_catalog_generation;
+    // Never reinterpret text the reader has already seen. Known image slots
+    // still acquire/animate when ready; new/unseen rows can use late catalogs.
+    if (item.presented) return;
     const auto *message = store->at(index);
     if (!message || message->deleted) return;
     std::array<forearm::MediaOccurrence, 8> occurrences{};
@@ -1236,6 +1417,8 @@ void render_rows() {
         const auto &item = layout[wanted[i]];
         const auto *message = store->at(wanted[i]);
         if (!message) continue;
+        if (positions[i] < scroll_y + chat_height && positions[i] + item.height > scroll_y)
+            layout[wanted[i]].presented = true;
         if (lv_obj_has_flag(row.button, LV_OBJ_FLAG_HIDDEN))
             lv_obj_clear_flag(row.button, LV_OBJ_FLAG_HIDDEN);
         if (row.top != positions[i]) {
@@ -1264,8 +1447,20 @@ void render_rows() {
             row.font_generation = font_generation;
             row.revision = item.revision;
             row.author_attempted = false;
-            const auto *name = display_author(*message);
-            lv_obj_set_style_text_font(row.author, author_font(name), 0);
+            const auto* full_name = plain_author(*message);
+            const auto* font = author_font(full_name);
+            row.badge_icons = forearm::header_badges(item.badges);
+            if(row.badge_icons.count)prepare_badge_atlas();
+            const int badge_width = row.badge_icons.count * (header_icon_size() + 3);
+            lv_obj_set_pos(row.badges, kSide, row_top);
+            lv_obj_set_size(row.badges, std::max(1, badge_width), item.author_height);
+            lv_obj_invalidate(row.badges);
+            lv_obj_set_x(row.author, kSide + badge_width);
+            lv_obj_set_width(row.author, kAuthorWidth - badge_width);
+            lv_obj_set_style_text_font(row.author, font, 0);
+            lv_obj_set_style_text_color(row.author, color(item.name_color ? item.name_color : forearm::username_color({}, full_name)), 0);
+            char name[104];
+            compact_author(full_name, font, kAuthorWidth - badge_width, name, sizeof(name));
             lv_label_set_text(row.author, name);
             row.emote_advances.fill(0);
             if (item.emotes) std::copy(std::begin(item.emotes->advances), std::end(item.emotes->advances), row.emote_advances.begin());
@@ -1286,7 +1481,6 @@ void render_rows() {
             lv_obj_add_flag(rows[i].button, LV_OBJ_FLAG_HIDDEN);
         render_emotes(rows[i], nullptr);
     }
-    prepare_visible_sprites();
 }
 
 void close_overlay() {
@@ -1481,7 +1675,7 @@ void selection_heading(lv_obj_t *panel, const char *title, const char *author_na
     lv_obj_set_height(author, author_height);
     const int channel_y = std::max(83, 45 + author_height + 6);
     auto *name = label(panel, channel_name, 14, channel_y, width - 28, &lv_font_montserrat_20, kMuted);
-    lv_label_set_long_mode(name, LV_LABEL_LONG_DOT);
+    lv_label_set_long_mode(name, LV_LABEL_LONG_SCROLL_CIRCULAR);
     lv_obj_set_height(name, 28);
 }
 
@@ -1521,9 +1715,14 @@ void show_selection(std::uint64_t sequence) {
     std::snprintf(moderation_target.message_id, sizeof(moderation_target.message_id), "%s", selected->message_id.c_str());
     std::snprintf(moderation_target.user_id, sizeof(moderation_target.user_id), "%s", selected->user_id.c_str());
     moderation_target.received_at_ms = selected->received_at_ms;
-    std::snprintf(selected_author, sizeof(selected_author), "%s", display_author(*selected));
+    std::snprintf(selected_author, sizeof(selected_author), "%s", plain_author(*selected));
     if (*channel) std::snprintf(selected_channel, sizeof(selected_channel), "%s", channel);
     else std::snprintf(selected_channel, sizeof(selected_channel), "Channel %s", selected->channel_id.c_str());
+    for (std::size_t i = 0; i < layout_count; ++i) if (layout[i].sequence == sequence && *layout[i].badges) {
+        const auto used = std::strlen(selected_channel);
+        std::snprintf(selected_channel + used, sizeof(selected_channel) - used, "  %s", layout[i].badges);
+        break;
+    }
     selected_metadata_verified = false;
     for (std::size_t i = 0; i < kHistory; ++i) {
         const auto &item = layout[i];
@@ -1982,6 +2181,10 @@ void app_ui_init() {
         lv_obj_set_style_bg_opa(row.body, LV_OPA_TRANSP, 0);
         lv_obj_clear_flag(row.body, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_add_event_cb(row.body, body_draw_event, LV_EVENT_DRAW_MAIN, &row);
+        row.badges = plain(row.button, kSide, row_top, 1, 27, kInk);
+        lv_obj_set_style_bg_opa(row.badges, LV_OPA_TRANSP, 0);
+        lv_obj_clear_flag(row.badges, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_add_event_cb(row.badges, badge_draw_event, LV_EVENT_DRAW_MAIN, &row);
         lv_obj_add_event_cb(row.button, row_event, LV_EVENT_ALL, &row);
         lv_obj_add_flag(row.button, LV_OBJ_FLAG_HIDDEN);
     }
@@ -2004,9 +2207,9 @@ void app_ui_init() {
     lv_obj_set_style_text_align(settings_caption, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_center(settings_caption);
     lv_obj_add_event_cb(settings_hit, settings_event, LV_EVENT_ALL, nullptr);
-    follow_button = button(screen, LV_SYMBOL_PAUSE, width - 62, height - 62, 52, 52, follow_event, kSurface);
+    follow_button = button(screen, LV_SYMBOL_PAUSE, 10, 10, 52, 52, follow_event, kSurface);
     follow_label = lv_obj_get_child(follow_button, 0);
-    fixture_badge = label(screen, "SYNTHETIC FIXTURE", 12, 10, 190, &lv_font_montserrat_16, kAmber);
+    fixture_badge = label(screen, "SYNTHETIC FIXTURE", 12, height - 28, 190, &lv_font_montserrat_16, kAmber);
     lv_obj_set_style_bg_color(fixture_badge, color(kSurface), 0);
     lv_obj_set_style_bg_opa(fixture_badge, LV_OPA_COVER, 0);
     lv_obj_add_flag(fixture_badge, LV_OBJ_FLAG_HIDDEN);
@@ -2116,7 +2319,23 @@ void app_ui_tick() {
     }
     // At most one bounded message enrichment per UI tick, never all512 records.
     refresh_one_catalog_message();
-    if (!layout_dirty && !follow_dirty) { request_visible_media(); return; }
+    if (!layout_dirty && !follow_dirty) {
+        // Animate immutable leased frames without rebuilding any text/layout.
+        static uint64_t animation_tick = 0;
+        if (now_ms() >= animation_tick) {
+            animation_tick = now_ms() + 50;
+            for (auto& row : rows) for (unsigned i = 0; i < row.images.size(); ++i) {
+                if (!row.images[i] || !row.image_sources[i]) continue;
+                const auto* frame = emote_cache_frame(row.image_sources[i], static_cast<uint32_t>(now_ms()));
+                if (lv_img_get_src(row.images[i]) != frame) {
+                    lv_img_set_src(row.images[i], frame);
+                    lv_img_set_pivot(row.images[i], 0, 0);
+                }
+            }
+        }
+        request_visible_media();
+        return;
+    }
     const auto layout_start = esp_timer_get_time();
     update_guard = true;
     lv_obj_set_height(content, std::max<int>(chat_height, total_height));
@@ -2131,6 +2350,8 @@ void app_ui_tick() {
     // programmatic guard remains held, then commit the requested position.
     lv_obj_update_layout(chat);
     lv_obj_scroll_to_y(chat, scroll_y, LV_ANIM_OFF);
+    // Width/font changes above must be settled before capturing canvas strides.
+    prepare_visible_sprites();
     record(layout_duration, static_cast<std::uint32_t>(first_layout_us + esp_timer_get_time() - second_layout_start));
     update_guard = false;
     synchronize_anchor();
@@ -2696,4 +2917,31 @@ void app_ui_set_backdrop_culling(bool enabled) {
     if (backdrop_culling_enabled == enabled) return;
     backdrop_culling_enabled = enabled;
     if (screen) lv_obj_invalidate(screen);
+}
+
+void app_ui_set_message_badges(const char* channel_id, const char* message_id, const char* badges, const char* name_color) {
+    if (!store || !channel_id || !message_id || !badges) return;
+    for (std::size_t i = 0; i < layout_count; ++i) {
+        const auto* message = store->at(i);
+        if (message->channel_id.view() != channel_id || message->message_id.view() != message_id || message->deleted) continue;
+        const auto foreground = forearm::username_color(name_color ? name_color : "", plain_author(*message));
+        if (!std::strcmp(layout[i].badges, badges) && layout[i].name_color == foreground) return;
+        layout[i].name_color = foreground;
+        std::int32_t old_top = 0;
+        const auto old_first = first_visible(&old_top);
+        const auto old_offset = scroll_y - old_top;
+        std::snprintf(layout[i].badges, sizeof(layout[i].badges), "%s", badges);
+        const auto old_height = layout[i].height;
+        layout[i].height = measure_message(*message, layout[i].emotes, &layout[i].author_height);
+        const auto delta = layout[i].height - old_height;
+        total_height += delta;
+        if (store->paused()) {
+            if (i < old_first) scroll_y += delta;
+            else if (i == old_first) scroll_y = old_top + std::min<std::int32_t>(old_offset, layout[i].height - 1);
+        }
+        ++layout[i].revision;
+        invalidate_sprite(layout[i].sequence);
+        layout_dirty = true;
+        return;
+    }
 }

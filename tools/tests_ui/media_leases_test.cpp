@@ -82,21 +82,23 @@ int main(){
     const auto unchanged=acquisitions;app_ui_scroll(1);pump();assert(acquisitions==unchanged); // Retain an exact existing lease.
     assert(publish("26"));assert(!publish("27")||lookup("25"));assert(lookup("25")&&lookup("25")->refs); // Pinned asset cannot retire.
     fresh();assert(!emote_cache_stats().pinned&&acquisitions==releases);
-    assert(app_ui_append("100","literal","300","viewer","Kappa"));app_ui_go_live();pump();
+    append("pending","999999");
     const auto literal_pixels=framebuffer;fresh();
     assert(publish("25"));race_acquire=true;append("race","25");
-    assert(!app_ui_stats().visible_emote_images&&!emote_cache_stats().pinned); // Ready snapshot lost acquisition; literal text remains.
+    assert(!app_ui_stats().visible_emote_images&&!emote_cache_stats().pinned); // Acquisition race retains the same non-text pending slot.
     assert(!std::memcmp(literal_pixels.data(),framebuffer.data(),sizeof(framebuffer)));
     assert(publish("25"));pump(128);assert(app_ui_stats().visible_emote_images==1); // Generation restores image without a new message.
     for(unsigned i=0;i<70;++i){fresh();const auto id=std::to_string(1000+i);assert(publish(id.c_str()));append(id.c_str(),id.c_str());
         assert(app_ui_stats().visible_emote_images==1&&emote_cache_stats().pinned==1);}
     assert(evictions>=64);fresh();assert(!emote_cache_stats().pinned&&acquisitions==releases);
-    // A catalog arrives after retained messages. Enrich visible history first,
-    // preserve its native Twitch span, and remove only the third-party span on refresh.
+    // A late catalog must not turn already displayed words into graphics.
+    // Existing native spans/anchors remain unchanged; unseen new rows can enrich.
     app_ui_set_fixture_mode(false);assert(publish("25"));assert(publish("7tv:late"));
-    append("catalog-native","25","Kappa late");app_ui_pause();const auto before=app_ui_stats();
+    append("catalog-native","25","Kappa late");app_ui_pause();pump(128);const auto before=app_ui_stats();
+    const auto shown_pixels = framebuffer;
     catalog_enabled=true;++catalog_generation;pump(128);
-    assert(app_ui_stats().visible_emote_images==2&&app_ui_stats().appended==before.appended);
+    assert(app_ui_stats().visible_emote_images==1&&app_ui_stats().appended==before.appended);
+    assert(!std::memcmp(shown_pixels.data(),framebuffer.data(),sizeof(framebuffer)));
     assert(app_ui_stats().anchor_sequence==before.anchor_sequence&&app_ui_stats().anchor_offset==before.anchor_offset);
     // A delayed transport event may have been interpreted before this catalog
     // and delivered after the generation scan completed. It still catches up
@@ -104,8 +106,8 @@ int main(){
     const auto collected=collect_calls;pump(128);assert(collect_calls==collected);
     assert(app_ui_append("100","delayed-old-catalog","300","viewer","late"));
     app_ui_go_live();pump(128);
-    assert(collect_calls==collected+1&&app_ui_stats().visible_emote_images==3);
-    catalog_enabled=false;++catalog_generation;pump(128);assert(app_ui_stats().visible_emote_images==1);
+    assert(collect_calls==collected+1&&app_ui_stats().visible_emote_images==2);
+    catalog_enabled=false;++catalog_generation;pump(128);assert(app_ui_stats().visible_emote_images==2);
     // Background history does not fill the cache request queue. Retries renew
     // only current viewport demand, without a new message being appended.
     fresh();for(unsigned i=0;i<40;++i){const auto id=std::to_string(2000+i);append(id.c_str(),id.c_str());}
@@ -114,5 +116,7 @@ int main(){
     const auto appended=app_ui_stats().appended;const auto last=std::string("2039");assert(publish(last.c_str()));pump(128);
     assert(app_ui_stats().appended==appended&&app_ui_stats().visible_emote_images>=1);
     fresh();assert(!emote_cache_stats().pinned&&acquisitions==releases);
-    std::puts("Media leases passed: exact retained leases, detach-before-release, race-safe literal fallback, generation-only recovery,70-asset retirement, visible-only retries and paced catalog history enrichment preserving native spans/anchors; no cache operations during DRAW.");
+    std::puts("Media leases passed: exact retained leases, detach-before-release, race-safe pending slots, generation-only recovery,70-asset retirement, visible-only retries and late-catalog text stability and first-paint enrichment preserving native spans/anchors; no cache operations during DRAW.");
 }
+
+const lv_img_dsc_t* emote_cache_frame(const lv_img_dsc_t* image, std::uint32_t) { return image; }

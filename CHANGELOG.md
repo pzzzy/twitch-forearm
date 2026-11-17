@@ -1,6 +1,15 @@
 # Changelog
 
-## Unreleased
+## 0.6.0-beta.1 — hardware-beta candidate
+
+- Animated Twitch and configured-channel/global 7TV GIFs, with bounded decoding, frame storage and static poster fallback.
+- Immediate reserved inline slots for recognized emotes, avoiding trigger text flashing before graphics load. Late catalogs preserve already displayed words; new and unseen rows can enrich.
+- Single-line username headers with colored role icons and readable Twitch name colors. Explicit ellipses keep unusually long names compact; the tapped view retains the complete name and badge details.
+- Pause/Go live now floats at top left opposite Settings.
+- Terminating animation resizing for very narrow GIFs, with exhaustive dimension/frame-budget coverage.
+- Host coverage for GIF parsing, badge captions and animation advancement without new messages. New development-image hardware results are separate from the published beta qualification.
+
+## Initial 0.4.0-beta.1 candidate scope (historical)
 
 The first public release candidate is **0.4.0-beta.1**, a hardware beta. Publication remains subject to the exact-image checks in [release gates](docs/releasing.md).
 

@@ -17,6 +17,7 @@ struct EmoteCacheStats {
     std::uint32_t generation = 0, evicted = 0, pinned = 0, lease_errors = 0;
     std::uint32_t catalog_generation = 0, catalog_retained = 0;
     std::uint32_t worker_stack_free = 0;
+    std::uint32_t animated_ready = 0, animation_frames = 0;
     std::uint32_t catalog_entries = 0, catalog_global_entries = 0, catalog_channel_entries = 0;
     std::uint32_t catalog_fetches = 0, catalog_failures = 0, catalog_truncated = 0;
     bool catalog_ready = false, catalog_channel_matched = false;
@@ -48,3 +49,6 @@ unsigned emote_cache_collect(const char* channel_id, const char* text,
 // background decoder. Does not download, replace a ready asset, or imply a
 // successful CDN request. The caller may release its bytes after this returns.
 bool emote_cache_seed_png(const char* id, const std::uint8_t* png, std::size_t bytes);
+
+// UI-owner only; returned immutable frame is covered by the original lease.
+const lv_img_dsc_t* emote_cache_frame(const lv_img_dsc_t* lease, std::uint32_t clock_ms);

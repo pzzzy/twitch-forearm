@@ -4,6 +4,7 @@
 #include "twitch_client.h"
 #include "forearm/device_config.h"
 #include "forearm/emote_fragments.h"
+#include "forearm/badge_caption.h"
 #include "emote_cache.h"
 
 #include <algorithm>
@@ -1065,6 +1066,7 @@ void process_frame(RawFrame& frame) {
             // identity. Preserve the full supported name or exact login.
             if (!copy_exact(event.display_name, string_value(notification, "chatter_user_name")) || !*event.display_name)
                 copy_exact(event.display_name, event.user_login);
+            copy_exact(event.name_color, string_value(notification, "color"));
             copy_text(event.text, string_value(message, "text"));
             forearm::MessageFragmentCursor fragment_cursor(string_value(message, "text"), std::strlen(event.text));
             const auto* fragments = cJSON_GetObjectItemCaseSensitive(message, "fragments");
@@ -1087,8 +1089,12 @@ void process_frame(RawFrame& frame) {
             event.emote_count = emote_cache_collect(event.channel_id, event.text, event.emotes, event.emote_count);
             const auto* badges = cJSON_GetObjectItemCaseSensitive(notification, "badges");
             const cJSON* badge = nullptr;
-            cJSON_ArrayForEach(badge, badges) {
+            // Prioritize roles/subscription before generic channel badge details.
+            for (unsigned pass = 0; pass < 2; ++pass) cJSON_ArrayForEach(badge, badges) {
                 const char* set = string_value(badge, "set_id");
+                if ((forearm::badge_role(set) != nullptr) != (pass == 0)) continue;
+                forearm::append_badge_caption(event.badge_text, sizeof(event.badge_text), set,
+                    string_value(badge, "id"), string_value(badge, "info"));
                 if (!std::strcmp(set, "moderator") || !std::strcmp(set, "broadcaster")) event.moderator = true;
             }
             // Preserve exact Shared Chat origin identities; destination-only
@@ -1305,6 +1311,10 @@ void worker(void*) {
             }
         }
         if (account_validated && active_socket < 0 && handoff_socket < 0 && now_ms() >= next_network_attempt_ms) {
+            // A global-only catalog cannot recognize the configured room's aliases.
+            if (!emote_cache_stats().catalog_channel_matched && now_ms()-last_validation_ms < 8000) {
+                state_message("Loading channel emotes"); vTaskDelay(pdMS_TO_TICKS(100)); continue;
+            }
             state_message("Connecting to Twitch chat");
             if (start_socket(0, kWsUrl, false)) active_socket = 0;
             else reconnect_later("Twitch connection unavailable; retrying");

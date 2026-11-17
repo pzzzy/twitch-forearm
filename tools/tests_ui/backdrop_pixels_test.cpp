@@ -265,7 +265,7 @@ int main() {
 
     app_ui_show_setup("Setup overlay", "Opaque overlay must restore the complete backdrop.");
     equivalent("opaque setup overlay", false); back();
-    tap(30, 45); pump(500); assert(app_ui_stats().selection_visible);
+    tap(242, 45); pump(500); assert(app_ui_stats().selection_visible);
     equivalent("message-selection overlay", false); back();
     app_ui_set_login("https://www.twitch.tv/activate", "ABCD-EFGH");
     equivalent("login QR overlay", false); app_ui_hide_login(); pump(64);
@@ -324,8 +324,8 @@ int main() {
     author_equivalent("full author/body edge clip", true, {0, 8, 319, 48});
     const std::string maximum_name(25, 'W');
     fresh_authors({maximum_name, "next_viewer"});
-    author_equivalent("wrapped25-character ASCII", true);
-    author_equivalent("wrapped line partial clip", true, {20, 38, 200, 70});
+    author_equivalent("ellipsized25-character ASCII", true);
+    author_equivalent("single header partial clip", true, {20, 12, 200, 25});
     for (unsigned start = 0x20; start <= 0x7E; start += 24) {
         std::string printable;
         for (unsigned c = start; c <= 0x7E && c < start + 24; ++c) printable += static_cast<char>(c);
@@ -411,8 +411,14 @@ int main() {
     forearm_ui_test_fail_large_allocations = false;
     author_equivalent("author allocation recovery", true);
     fresh_authors({std::string(100, 'W')});
-    author_equivalent("oversized author uses native", false);
-    assert(!app_ui_stats().author_cache_bytes);
+    author_equivalent("oversized author compact header", true);
+    assert(app_ui_stats().author_cache_bytes);
+    fresh_authors({"PREVIEW", "badge_viewer_"});
+    app_ui_set_message_badges("100", "author-1", "[MOD] [VIP] [SUB 12m] ", "#54D6C7");pump(64);
+    author_equivalent("colored icons and variable header width", true);
+    author_equivalent("icons and author clipped together", true, {10,75,245,110});
+    app_ui_set_message_badges("100", "author-1", "[MOD] [VIP] [SUB 12m] ", "#7EB6FF");pump(64);
+    author_equivalent("name color invalidates original cached foreground", true);
     fresh_authors({"shared_viewer", "shared_viewer", "shared_viewer", "shared_viewer"});
     const auto shared_builds = app_ui_stats().author_cache_builds;
     author_equivalent("shared author cache identity", true);
@@ -432,5 +438,22 @@ int main() {
         author_equivalent("scaled partial glyph clip", true, {8,12,245,72});
     }
     app_ui_set_ui_scale(100); pump(64);
+    // First paint after sequential mixed-width/color/font metadata, as on USB/EventSub.
+    fresh_authors({"PREVIEW"});
+    const char* captions[]={"[MOD] [VIP] [SUB 12m] ","[HOST] [SUB 24m] [PRIME] ","[ARTIST] [SUB 3m] ","[MOD] ","[other 1] "};
+    const char* names[]={"abcdefghijklmnopqrstuvwxy","broadcast_viewer","moonlight_artist",u8"ЖΩчат_пример","other_viewer"};
+    for(unsigned i=0;i<5;++i) {
+        const auto id="first-header-"+std::to_string(i);
+        assert(app_ui_append("100",id.c_str(),"300",names[i],"Readable chat."));
+        app_ui_set_message_badges("100",id.c_str(),captions[i],i%2?"#54D6C7":"#7EB6FF");
+        app_ui_go_live();pump(8);
+        const auto initial=render(true,{0,0,319,479},0x1357);
+        app_ui_set_author_cache(false);pump(8);
+        const auto native=render(false,{0,0,319,479},0xB46A);
+        compare_author_pixels(native,initial,{0,0,319,479},"mixed header initial cache versus native");
+        app_ui_set_author_cache(true);pump(8);
+    }
     std::printf("Native LVGL author cache: %u native-label poisoned-frame comparisons pixel-identical; ASCII25/Unicode100B/clips/pressed/mask/layers/OOM/LRU; no cache allocation/free during DRAW.\n", author_comparisons);
 }
+
+const lv_img_dsc_t* emote_cache_frame(const lv_img_dsc_t* image, std::uint32_t) { return image; }

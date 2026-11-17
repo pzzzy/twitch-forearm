@@ -1,6 +1,6 @@
 # Dependency and advisory review
 
-Reviewed **2026-11-15** for the **0.5.0-beta.1 candidate** on ESP32-S3.
+Reviewed **2026-11-16** for the **0.6.0-beta.1 candidate** on ESP32-S3.
 This is an applicability assessment of known vendor advisories and the selected
 configuration, not a claim that the software is free of vulnerabilities.
 Repeat it before releases and after dependency, compiler, protocol or decoder
@@ -138,20 +138,20 @@ not describe this client transport.
 was reviewed alongside the actual bundled decoder and application limits above.
 Untrusted image parsing remains a native-code attack surface even behind a
 verified CDN. Keep the bounds, PNG signature/IHDR checks, metadata restrictions
-and fixed origins. The reviewed static 7TV poster/Twemoji PNG paths use the same
-bounded decoder and receive no Twitch credentials. The reusable LRU holds
+and fixed origins. Static 7TV poster/Twemoji PNG paths use that bounded decoder and receive no Twitch credentials. Twitch default-format and animated 7TV paths can instead return GIFs to the original bounded project decoder. The reusable LRU holds
 visible image leases through LVGL source detachment and decoder invalidation;
 only unpinned entries retire. Catalog parsing remains bounded to 512 aliases
 and 4 MiB, with immutable snapshots while readers use them. Host lifecycle tests
 cover retirement and readiness/acquire races; they do not prove decoder safety.
-New formats, animation decoding, additional providers or arbitrary URLs require
-a separate review; do not infer permission from cache capacity alone.
+The 0.6 animation review covers the original GIF87a/89a parser: at most 128 KiB source, 128×128 pixels, 512 source frames, bounded LZW dictionary/stack and expansion work, and a 30-second duration limit in the cache adapter. Decoded animation frames are immutable under the original image lease; at most 32 stored frames / 96 KiB per animation share the 512 KiB pixel budget. Input buffers and the decode workspace live outside task stacks. Resize height strictly decreases until its budget fits, including 1×128 inputs; exhaustive width/height/frame cases check termination and byte bounds. The SDK's unbounded-data LVGL GIF decoder is not used for CDN payloads. Truncation and mutation checks run under ASan/UBSan, and independent compositing comparisons cover palettes, partial frames, transparency and disposal. These tests and bounds reduce exposure rather than proving correctness. Role icons are original vector code with bounded immutable runtime atlases (at most 50 KiB), not externally decoded artwork.
+
+Future formats, providers or arbitrary URLs require separate review. The November 16 recheck found the same 26 published ESP-IDF advisories covered above, zero published LVGL entries and the same two unrelated esp-protocols entries. The primary Mbed TLS advisory index still lists the July 2026 fixes and the documented configuration qualifications above.
 
 ## Host and font-tool audit results
 
 The reviewed host requirements are `pyserial==3.5` and `Pillow==13.0.0` on
 Python 3.11 or newer. `pip-audit 2.10.1` reported no known findings for those two
-installed requirements in the November 15 recheck. The same day's separate
+installed requirements in the November 16 recheck. The same day's separate
 `fonttools==4.60.2` audit also reported no known findings. `npm audit` for the pinned font-tool lock reported
 zero findings across 11 dependencies. These results are time- and database-bound;
 they do not assess the SDK, C decoders, radio firmware, application logic or

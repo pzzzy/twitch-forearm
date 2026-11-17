@@ -98,7 +98,7 @@ static void fresh_message(const char *id = "message-1", const char *author = "Ta
     pump(500);
 }
 static void select_message() {
-    tap(30, 45);
+    tap(242, 45);
     pump(500);
     assert(app_ui_stats().selection_visible);
 }
@@ -677,3 +677,5 @@ int main() {
     std::puts("Drag feedback passed: press/jitter keeps highlight, threshold-only cancellation and native scroll clear it without losing capture, releases never select, and a fresh tap still selects.");
     std::puts("Native LVGL moderation UI passed: guarded contacts, distinct confirmation, drag/doubletap rejection, frozen pending target, permissions, source identity, deletion, stale session, all timeout presets, unknown/no retry, acknowledged-only Undo/Unban, immutable restoration after history eviction/clear/new selection, new request IDs, no held-contact confirmation.");
 }
+
+const lv_img_dsc_t* emote_cache_frame(const lv_img_dsc_t* image, std::uint32_t) { return image; }

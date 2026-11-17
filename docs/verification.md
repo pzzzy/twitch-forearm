@@ -10,7 +10,7 @@ identities must match the package manifest. An outcome document added later must
 not silently change the source identity of an already tested binary.
 
 The implementation includes guarded moderation, saved read-only profiles,
-positioned inline static emotes and complete sender-name/login fallback. Host
+positioned inline emotes and complete sender-name/login fallback. Host
 tests cover those contracts with fake action callbacks; they do not send live
 moderation. A Twitch acknowledgement, diagnostic injection and physical finger
 interaction are separate kinds of evidence.
@@ -23,6 +23,20 @@ their actual source/image rather than inferred from these pins.
 
 Battery, charging, temperature against skin and forearm mounting are
 **unqualified** in the agreed hardware-beta scope.
+
+## 0.6.0-dev animation/badge development — November 16, 2026
+
+The development image displayed a real configured-channel 7TV GIF fetched over HTTPS. Four successive framebuffer captures contained different emote frames, with MOD/VIP/subscription captions visible. This is a framebuffer check, not a camera or physical-finger measurement. A synthetic 70-animation cache-turnover run exercised eight evictions with zero lease, display or touch errors. A three-frame 600 ms fixture advanced about five completed panel frames per second while idle, matching its source cadence.
+
+Injected dense-chat scrolling measured 29.56 completed panel frames/s programmatically, 30.15 during a held contact, and 27.91 across ten gestures including release idle/USB overhead. That workload used plain synthetic messages and the saved 67% size; it does not establish the same rate for many simultaneous animations. No Twitch posts or moderation actions were sent, and the configured channel profile remained read-only.
+
+The bounded decoder was compared with an independent decoder on an original three-frame fixture, a 51-frame public 7TV GIF and a partial-frame/transparency/disposal fixture. Truncation/mutation checks ran under ASan/UBSan. Actual-LVGL host tests cover pending slots, idle animation frame changes, caption wrapping, pixel-identical already-displayed text across a late catalog refresh, first-paint enrichment and existing scroll/lease contracts. The 512-record layout table includes a fixed 96-byte badge caption and username-color metadata per record in PSRAM.
+
+The single-line header refinement replaces text role prefixes with original colored vector icons and validated Twitch username colors. Host checks cover all nine sizes, safe UTF-8 ellipses, complete names/details in the tapped view, icon colors, color changes and 65 native/cached author poisoned-frame comparisons, including sequential first-paint mixed-width/font/color metadata. The draw path performs no cache allocation or mutation.
+
+The first compact-icon hardware preview exposed corrupted mixed-width cached usernames and measured 20.69 frames/s in its animated scrolling workload. Turning the name cache off and rebuilding it produced native-identical captures. The correction settles row layout before preparing canvas strides and uses bounded immutable icon atlases rather than repeating vector rasterization per frame. A formerly blank unknown-badge tile now uses a visible gold medal; overflow uses a teal plus. Matching-image hardware checks are required after this correction.
+
+These are development checks, not release qualification. Published 0.5.0-beta.1 binaries and their qualification identity remain unchanged. A new downloadable release requires its own exact-image checks.
 
 ## 0.5.0-beta.1 candidate — November 15, 2026
 

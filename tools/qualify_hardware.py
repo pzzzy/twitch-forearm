@@ -190,7 +190,7 @@ class Qualification:
         self.command('live')
         self.command('load_start', rate=20, duration_ms=round(duration * 1000), length=500, pattern='cycle')
         self.sleep(min(1, duration / 4))
-        self.inject([(284, 444)], .12)  # Portrait pause circle / Go live pill.
+        self.inject([(36, 36)], .12)  # Portrait pause circle / Go live pill.
         paused = self.snapshot(f'soak-{iteration}-injected-pause')
         self.check(f'Injected pause {iteration}', paused['ui']['paused'], input='injected')
         self.inject([(140, y) for y in range(120, 321, 25)])
@@ -201,7 +201,7 @@ class Qualification:
         self.check(f'Injected scroll and paused anchor {iteration}', b['paused'] and
                    b['scrolls'] > paused['ui']['scrolls'] and b['unread'] > a['unread'] and
                    (a['anchor_sequence'], a['anchor_offset']) == (b['anchor_sequence'], b['anchor_offset']), input='injected')
-        self.inject([(284, 444)], .12)
+        self.inject([(36, 36)], .12)
         live = self.snapshot(f'soak-{iteration}-injected-go-live')
         self.check(f'Injected Go live {iteration}', not live['ui']['paused'] and live['ui']['unread'] == 0,
                    input='injected', physical_touch_latency_measured=False)

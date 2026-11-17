@@ -96,7 +96,7 @@ int main() {
             expected[i]==22?&lv_font_montserrat_22:&lv_font_montserrat_24));
     }
     assert(heights.front()<heights[4] && heights[4]<heights.back());
-    tap(30,45); pump(500); assert(app_ui_stats().selection_visible);
+    tap(242,45); pump(500); assert(app_ui_stats().selection_visible);
     app_ui_set_ui_scale(90); pump(); assert(!app_ui_stats().selection_visible && !app_ui_stats().selected_sequence);
     assert(app_ui_stats().paused && app_ui_stats().anchor_sequence==anchor && !moderation_calls);
     tap(284,36); pump(); auto *control=slider(lv_scr_act()); assert(control);
@@ -151,7 +151,7 @@ int main() {
     for(const auto level:levels) for(const auto *author_text:{"jgyq_", "Ёgjq_"}) {
         app_ui_set_ui_scale(level); fixtures();
         assert(app_ui_append("100","modal-size","300",author_text,"A synthetic message."));
-        app_ui_go_live();pump();tap(30,45);pump(500);assert(app_ui_stats().selection_visible);
+        app_ui_go_live();pump();tap(242,45);pump(500);assert(app_ui_stats().selection_visible);
         auto *heading=find(lv_scr_act(),"SELECTED MESSAGE");assert(heading);
         auto *panel=lv_obj_get_parent(heading);
         auto *author=find(panel,author_text);assert(author);
@@ -186,3 +186,5 @@ int main() {
     assert(!app_ui_stats().emote_rows && !app_ui_stats().visible_emote_images);
     std::puts("Native size control passed: clean startup, real nine-size fonts, anchored reflow, stale-selection reset,44px slider, live held-contact preview, one persistence callback, scaled wide emotes,18 unclipped modal-identity pixel comparisons and cached/native pixel equality.");
 }
+
+const lv_img_dsc_t* emote_cache_frame(const lv_img_dsc_t* image, std::uint32_t) { return image; }

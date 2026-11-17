@@ -100,7 +100,7 @@ def run_checks(d, output, report):
         idle = 0
         for index in range(20):
             d.command('pause'); before = state('go-live-before-' + str(index))
-            d.gesture([(282, 445)], step=.075)
+            d.gesture([(36, 36)], step=.075)
             time.sleep(.09)
             after = state('go-live-after-' + str(index))
             check(not after['ui']['paused'], 'Go live did not remain live after one tap at cycle ' + str(index))

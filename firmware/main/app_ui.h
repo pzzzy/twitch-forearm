@@ -173,3 +173,6 @@ void app_ui_set_author_cache(bool enabled);
 // the native opaque screen background
 // under ready opaque cached body images; does not change layout or interaction.
 void app_ui_set_backdrop_culling(bool enabled);
+
+// UI-owner only: bounded display captions, independent of verified role/target metadata.
+void app_ui_set_message_badges(const char* channel_id, const char* message_id, const char* badges, const char* name_color = nullptr);
