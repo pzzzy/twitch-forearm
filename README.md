@@ -2,7 +2,7 @@
 
 A native, standalone Twitch chat reader for the Guition JC3248W535 family: ESP32-S3, 3.5-inch 320 × 480 IPS capacitive touch, 16 MB flash and 8 MB PSRAM. It operates directly over Wi-Fi or a phone hotspot. A computer provides development and initial USB setup; normal chat reception runs on the device.
 
-**0.6.0-dev source; latest published hardware beta: 0.5.0-beta.1.** Development adds animated Twitch/7TV emotes, reserved pending-image slots and compact colored role icons. Includes color emoji, a live 16–36 px text-size slider, native startup graphics and saved-profile/session recovery. See [runtime behavior](docs/native-runtime.md). Qualification outcomes belong to the matching release's notes and attached summary; this source description does not establish a pass for an image.
+**0.6.0-beta.1 hardware-beta candidate source.** Adds animated Twitch/7TV emotes, reserved pending-image slots and compact colored role icons. Includes color emoji, a live 16–36 px text-size slider, native startup graphics and saved-profile/session recovery. See [runtime behavior](docs/native-runtime.md). Qualification outcomes belong to the matching release's notes and attached summary; this source description does not establish a pass for an image.
 
 For a particular hardware-beta download, use its [release notes and attached `qualification-summary.json`](https://github.com/pzzzy/twitch-forearm/releases): the tested source commit and image hash must match its manifest. The source documentation preserves historical measurements; they do not automatically qualify another build. Battery, charging, skin temperature and forearm mounting are unqualified. See the [verification history](docs/verification.md) and [release-validation procedure](docs/releasing.md).
 

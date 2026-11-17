@@ -262,10 +262,10 @@ bool decode_animation(Entry &entry, const Download &source) {
     }
     // Group source frames uniformly, retaining each group's complete time span.
     const unsigned stored = std::min(frames, 32u);
-    unsigned ow = width, oh = height;
-    while (oh > 32 || ow > 128 || ow * oh * stored * 3 > 96 * 1024) {
-        ow = std::max(1u, ow - 1);
-        oh = std::max(1u, (height * ow + width / 2) / width);
+    unsigned ow = 0, oh = 0;
+    if (!forearm::animation_dimensions(width, height, stored, ow, oh)) {
+        heap_caps_free(workspace);
+        return false;
     }
     const unsigned stride = ow * oh * 3, bytes = stride * stored;
     auto *pixels = reserve_pixels(bytes)

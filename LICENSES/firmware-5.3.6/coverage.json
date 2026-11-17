@@ -283,7 +283,7 @@
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
     "project/core/include/forearm/media.h": {
-      "sha256": "6d1c8730eb469572c5da8207b6703b32aa48ca29113a92a27b29526c241d0827",
+      "sha256": "38faee97721c75892e91d0a0f63213e540974cfe859b297eaedcefd706d22c0e",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -604,7 +604,7 @@
       "basis": "Original project code under root license; explicit font/panel SPDX takes precedence"
     },
     "project/firmware/main/emote_cache.cpp": {
-      "sha256": "b84cbacfe775514a6dfcf9e394ce2c1d631b3225bc771a978bb19852771775b0",
+      "sha256": "ff31420be8c18f44b91d49f29a8b7102dabf465fc58b46559f61bda51addd6fb",
       "license": "Apache-2.0",
       "license_files": [
         "LICENSES/Apache-2.0.txt",
@@ -19077,25 +19077,6 @@
       ]
     }
   },
-  "variant_provenance": {
-    "xtensa-esp-elf-esp-13.2.0_20250707-linux-amd64": {
-      "review_status": "approved",
-      "platform": "linux-amd64",
-      "toolchain": "Espressif xtensa-esp-elf esp-13.2.0_20250707 (GCC13.2.0)",
-      "package_url": "https://github.com/espressif/crosstool-NG/releases/download/esp-13.2.0_20250707/xtensa-esp-elf-13.2.0_20250707-x86_64-linux-gnu.tar.xz",
-      "package_sha256": "d1f1378394baa3788bf78062e5d041cb14d4858bbb57f86d59e5b83fc9d5525f",
-      "package_size": 113781196,
-      "manifest_url": "https://github.com/espressif/esp-idf/blob/79e3454c68248bd7d881721c9b2e94561378a8ce/tools/tools.json",
-      "reviewed_on": "2026-11-10",
-      "review_notes": [
-        "Downloaded official package, verified whole-package size and SHA256 against the pinned SDK tools manifest, and matched each of the five exact CI input hashes to its file in that package.",
-        "libgcc.a, libc.a and libstdc++.a retain the same ordered member lists as the reviewed macOS-arm64 package (118, 733 and 190 members respectively). Runtime licenses remain GCC GPL3 with Runtime Library Exception3.1 and the Newlib collection.",
-        "c++config.h differs only in _GLIBCXX11_USE_C99_COMPLEX being defined on Linux; copyright and license comments are unchanged.",
-        "Official Linux GCC GPL3, GCC Runtime Library Exception3.1, Newlib COPYING.NEWLIB, Newlib COPYING.LIBGLOSS and LLVM/PSTL full license files are byte-identical to the distributed canonical texts."
-      ]
-    }
-  },
-  "sdk_commit": "79e3454c68248bd7d881721c9b2e94561378a8ce",
   "review_notes": [
     "SPDX expressions checked; Mbed TLS Apache and WPA BSD alternatives explicitly selected.",
     "Original SDK default Apache is used only after per-file exception checks; all actual copyright/license comments retained.",
@@ -19119,6 +19100,26 @@
     "Reviewed 0.6.0-dev animation and badge inputs: two added original Apache-2.0 headers (bounded GIF parser and badge captions), eight changed original project inputs, no external SDK/toolchain/font hashes or canonical license/comment blocks changed. Existing five exact Linux variants, provenance and review notes are retained. No external GIF decoder or artwork was vendored. Build freshness checks passed; this catalog does not qualify a release or hardware reliability.",
     "Reviewed compact chat header refinement: one added original Apache-2.0 header for role-icon selection and readable username colors, five changed original UI/network inputs, no external source/toolchain/font/prebuilt hashes or license/comment blocks changed. Vector role symbols are original drawing code, not vendored artwork. Existing exact platform variants and provenance are retained. Build freshness passed; hardware/release qualification remains separate.",
     "Reviewed original header-cache correction and icon-atlas drawing code: only app_ui.cpp and chat_header.h hashes change. No external inputs, artwork, font data, license/comment blocks or platform variants changed. Geometry settles before canvas preparation; bounded role atlases are original project pixels generated at runtime. Exact-image audit remains required.",
-    "Reviewed original pause/Go live positioning update in app_ui.cpp. The top-left control and bounded unread caption leave the Settings target clear; no new external inputs, assets, license evidence or platform variants changed. Exact rebuilt-image audit remains required."
-  ]
+    "Reviewed original pause/Go live positioning update in app_ui.cpp. The top-left control and bounded unread caption leave the Settings target clear; no new external inputs, assets, license evidence or platform variants changed. Exact rebuilt-image audit remains required.",
+    "Reviewed 0.6.0-beta.1 freeze: original media.h and emote_cache.cpp updates bound animation output resizing, including narrow source images; no new paths, external source/font/toolchain/prebuilt hashes, notice blocks or platform variants changed. Sanitized/exhaustive dimension and GIF decoder tests cover the new path. Build freshness passed; final exact-image audit and hardware qualification remain required."
+  ],
+  "variant_provenance": {
+    "xtensa-esp-elf-esp-13.2.0_20250707-linux-amd64": {
+      "review_status": "approved",
+      "platform": "linux-amd64",
+      "toolchain": "Espressif xtensa-esp-elf esp-13.2.0_20250707 (GCC13.2.0)",
+      "package_url": "https://github.com/espressif/crosstool-NG/releases/download/esp-13.2.0_20250707/xtensa-esp-elf-13.2.0_20250707-x86_64-linux-gnu.tar.xz",
+      "package_sha256": "d1f1378394baa3788bf78062e5d041cb14d4858bbb57f86d59e5b83fc9d5525f",
+      "package_size": 113781196,
+      "manifest_url": "https://github.com/espressif/esp-idf/blob/79e3454c68248bd7d881721c9b2e94561378a8ce/tools/tools.json",
+      "reviewed_on": "2026-11-10",
+      "review_notes": [
+        "Downloaded official package, verified whole-package size and SHA256 against the pinned SDK tools manifest, and matched each of the five exact CI input hashes to its file in that package.",
+        "libgcc.a, libc.a and libstdc++.a retain the same ordered member lists as the reviewed macOS-arm64 package (118, 733 and 190 members respectively). Runtime licenses remain GCC GPL3 with Runtime Library Exception3.1 and the Newlib collection.",
+        "c++config.h differs only in _GLIBCXX11_USE_C99_COMPLEX being defined on Linux; copyright and license comments are unchanged.",
+        "Official Linux GCC GPL3, GCC Runtime Library Exception3.1, Newlib COPYING.NEWLIB, Newlib COPYING.LIBGLOSS and LLVM/PSTL full license files are byte-identical to the distributed canonical texts."
+      ]
+    }
+  },
+  "sdk_commit": "79e3454c68248bd7d881721c9b2e94561378a8ce"
 }

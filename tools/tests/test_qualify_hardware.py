@@ -340,6 +340,7 @@ class QualificationTests(unittest.TestCase):
             touches = [call.kwargs for call in calls if call.args[0] == 'touch']
             self.assertTrue(all(0 <= event['x'] < 320 and 0 <= event['y'] < 480 for event in touches))
             self.assertEqual(touches[-1], {'x': 0, 'y': 0, 'pressed': 0, 'enabled': 0})
+            self.assertEqual(sum(event['x'] == 36 and event['y'] == 36 and event['pressed'] == 1 for event in touches), 2)
             self.assertTrue(all(check['passed'] for check in run.report['checks']))
             self.assertEqual(run.report['checks'][-2]['input'], 'injected')
 

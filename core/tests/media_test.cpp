@@ -23,6 +23,20 @@ bool catalog(std::string_view input, bool global, std::vector<CatalogEmote>& out
     return parser.finish();
 }
 int main() {
+    unsigned resized_width = 0, resized_height = 0;
+    CHECK(forearm::animation_dimensions(1,128,32,resized_width,resized_height));
+    CHECK(resized_width==1 && resized_height==32);
+    CHECK(forearm::animation_dimensions(128,1,32,resized_width,resized_height));
+    CHECK(resized_width==128 && resized_height==1);
+    CHECK(!forearm::animation_dimensions(0,128,32,resized_width,resized_height));
+    CHECK(!forearm::animation_dimensions(129,128,32,resized_width,resized_height));
+    CHECK(!forearm::animation_dimensions(128,128,33,resized_width,resized_height));
+    for(unsigned w=1;w<=128;++w) for(unsigned h=1;h<=128;++h) for(unsigned frames=1;frames<=32;++frames) {
+        CHECK(forearm::animation_dimensions(w,h,frames,resized_width,resized_height));
+        CHECK(resized_width>=1 && resized_width<=w && resized_height>=1 && resized_height<=h && resized_height<=32);
+        CHECK(resized_width*resized_height*frames*3<=96*1024);
+    }
+
     // Long-session LRU: hundreds of distinct assets cannot exhaust the fixed
     // table, while two independently held image leases prevent reuse.
     std::array<MediaCacheSlot, 64> slots{};

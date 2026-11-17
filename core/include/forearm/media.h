@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -77,6 +78,21 @@ inline bool media_boundaries(std::string_view text, std::size_t offset, std::siz
     return length && offset <= text.size() && length <= text.size() - offset &&
            (!offset || !media_word(static_cast<unsigned char>(text[offset - 1]))) &&
            (offset + length == text.size() || !media_word(static_cast<unsigned char>(text[offset + length])));
+}
+// Height decreases on every retry, even when rounding has reached one pixel
+// in width. A 1x128 GIF must never spin trying to make width smaller than one.
+inline bool animation_dimensions(unsigned source_width, unsigned source_height, unsigned frames,
+                                  unsigned& width, unsigned& height) {
+    width = height = 0;
+    if (!source_width || !source_height || source_width > 128 || source_height > 128 || !frames || frames > 32) return false;
+    height = std::min(source_height, 32u);
+    width = std::max(1u, (source_width * height + source_height / 2) / source_height);
+    while (width * height * frames * 3 > 96 * 1024) {
+        if (height <= 1) return false;
+        --height;
+        width = std::max(1u, (source_width * height + source_height / 2) / source_height);
+    }
+    return true;
 }
 inline void media_dimensions(unsigned source_width, unsigned source_height, unsigned& width, unsigned& height) {
     width = source_width; height = source_height;
