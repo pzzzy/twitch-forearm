@@ -1,6 +1,6 @@
 # Native runtime
 
-Forearm Chat 0.5.0-beta.1 hardware-beta source includes size controls, startup graphics, richer media, saved-profile display and session recovery for the ESP32-S3 display. A release's attached qualification summary and notes identify the exact tested source/image and results; this runtime description does not establish a hardware pass. [Verification](verification.md) preserves dated development snapshots, including the rejected `54c1169c` soak; those records do not qualify another build. Host passes do not establish device results. Battery/power/thermal/mount qualification remains separate.
+Forearm Chat 0.6.0-beta.1 hardware-beta source includes animated emotes, compact colored sender headers, size controls, startup graphics, saved-profile display and session recovery for the ESP32-S3 display. A release's attached qualification summary and notes identify the exact tested source/image and results; this runtime description does not establish a hardware pass. [Verification](verification.md) preserves dated development snapshots, including the rejected `54c1169c` soak; those records do not qualify another build. Host passes do not establish device results. Battery/power/thermal/mount qualification remains separate.
 
 ## Reading and controls
 
